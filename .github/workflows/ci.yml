@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Plan EVERY component, not just the changed ones. `--changed` is right for
+  # ordinary commits, but it means a commit touching only CI or intent produces
+  # an empty matrix and a green check that verified nothing. This is the way to
+  # force a full convergence — and the way to prove the fleet still builds.
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Plan every component (ignore --changed)
+        type: boolean
+        default: true
 
 # PR runs share a group per ref and superseded runs are cancelled (each push
 # re-plans anyway). Main pushes get a unique group: convergence plans --changed
@@ -42,12 +52,18 @@ jobs:
           version: v2.53.2
       - run: |
           set -euo pipefail
-          orun plan \
-            --from-ci github \
-            --event-file "$GITHUB_EVENT_PATH" \
-            --intent intent.yaml \
-            --output plan.json \
-            --changed
+          plan_args=(
+            --from-ci github
+            --event-file "$GITHUB_EVENT_PATH"
+            --intent intent.yaml
+            --output plan.json
+          )
+          if [ "${{ inputs.full }}" != "true" ]; then
+            plan_args+=(--changed)
+          fi
+          orun plan "${plan_args[@]}"
+
+          echo "planned $(jq '.jobs | length' plan.json) job(s)"
       - id: matrix
         run: |
           echo "job-matrix=$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
