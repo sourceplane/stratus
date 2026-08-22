@@ -82,7 +82,26 @@ environments:
       # Shared, OPTIONAL values only. A schema-required parameter is declared on
       # the component itself — environment defaults do not satisfy `required`,
       # which `orun plan` enforces even though `orun component` does not.
+      #
+      # An OPTIONAL parameter must still be given a value somewhere. A schema
+      # `default:` is documentation, not a fallback: orun does not materialise
+      # it, so an undeclared parameter renders as the literal string
+      # "<no value>" in the step it is interpolated into. That is how
+      # verify-structure failed — `test -f "<no value>"` exits 1 with no output,
+      # which reads as a mystery. Everything below has a schema default and is
+      # interpolated unguarded, so every one of them needs a value here; the CI
+      # plan step now greps plan.json for "<no value>" so a new one cannot land
+      # unnoticed.
+      dotnet-package:
+        packageOutput: artifacts/packages
+      ef-migrate:
+        connectionSecretRef: DATABASE_CONNECTION_STRING
       dotnet-service:
+        dockerfile: Dockerfile
+        healthPath: /health
+        smokeRetries: "12"
+        canaryWeight: "10"
+        canarySoakSeconds: "60"
         # Coolify is the small baseline's target: one bearer token instead of
         # an Entra app registration plus a federated-identity trust, and real
         # Kafka/RabbitMQ/Postgres as first-class services beside it. The Azure

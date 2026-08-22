@@ -76,6 +76,31 @@ jobs:
           count="$(jq '.jobs | length' plan.json)"
           echo "planned ${count} job(s)"
           echo "job-count=${count}" >> "$GITHUB_OUTPUT"
+
+          # A schema `default:` is documentation, not a fallback — orun does not
+          # materialise it — so a parameter nobody sets renders as the literal
+          # string "<no value>" in whatever shell command interpolates it.
+          # `test -f "<no value>"` exits 1 with no output; `--name "<no value>"`
+          # would be worse. Catch it in the plan, where the message can name the
+          # step, rather than as a silent non-zero exit twenty minutes later.
+          # Detected with jq, NOT grep: orun HTML-escapes the plan, so the file
+          # on disk holds <no value> and `grep '<no value>'` matches
+          # nothing. jq decodes before comparing. The first version of this gate
+          # was the grep, and it passed on a plan that had six of them.
+          #
+          # The whole step is searched, not just .run: a parameter can also be
+          # interpolated into a step's `with` or `env`.
+          offenders="$(jq -r '[ .jobs[]
+                                | .id as $job
+                                | (.steps // [])[]
+                                | select(tojson | contains("<no value>"))
+                                | "  \($job) › \(.id)" ] | .[]' plan.json)"
+          if [ -n "$offenders" ]; then
+            echo "plan: unset parameter(s) rendered as the literal string '<no value>':" >&2
+            printf '%s\n' "$offenders" >&2
+            echo "plan: give each one a value on the component or in the environment's parameterDefaults." >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: orun-plan
