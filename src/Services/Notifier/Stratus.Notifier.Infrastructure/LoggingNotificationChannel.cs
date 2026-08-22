@@ -16,7 +16,22 @@ public sealed class LoggingNotificationChannel(ILogger<LoggingNotificationChanne
         string body,
         CancellationToken ct = default)
     {
-        logger.LogInformation("[notification] to={Recipient} subject={Subject}", recipient, subject);
+        LoggingChannelLog.Delivered(logger, recipient, subject);
         return Task.FromResult(Result<bool>.Success(true));
     }
+}
+
+/// <summary>
+/// Source-generated logging, for consistency with every other call site in the
+/// fleet. The arguments here are plain parameters and would not trip CA1873 on
+/// their own, but one logging idiom is worth more than a per-site exemption:
+/// the next edit that swaps a parameter for a property access should not
+/// silently reintroduce the defect.
+/// </summary>
+internal static partial class LoggingChannelLog
+{
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "[notification] to={Recipient} subject={Subject}")]
+    public static partial void Delivered(ILogger logger, string recipient, string subject);
 }

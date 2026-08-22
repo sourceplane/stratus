@@ -28,7 +28,7 @@ public sealed class CommandConsumer(
         {
             // Idle rather than crash-looping: an unconfigured broker is a
             // deployment state, and a restart loop hides it.
-            logger.LogWarning("Service Bus is not configured; the command consumer is idle.");
+            CommandConsumerLog.NotConfigured(logger);
             return;
         }
 
@@ -66,7 +66,7 @@ public sealed class CommandConsumer(
 
         processor.ProcessErrorAsync += error =>
         {
-            logger.LogError(error.Exception, "Service Bus processor error in {Source}.", error.ErrorSource);
+            CommandConsumerLog.ProcessorError(logger, error.ErrorSource, error.Exception);
             return Task.CompletedTask;
         };
 
@@ -75,4 +75,23 @@ public sealed class CommandConsumer(
             .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         await processor.StopProcessingAsync(CancellationToken.None).ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// Source-generated logging. The processor-error handler is called from the
+/// Service Bus SDK's own callback, potentially at high frequency during a
+/// broker outage — exactly when the logging path must not allocate.
+/// </summary>
+internal static partial class CommandConsumerLog
+{
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Service Bus is not configured; the command consumer is idle.")]
+    public static partial void NotConfigured(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Service Bus processor error in {Source}.")]
+    public static partial void ProcessorError(
+        ILogger logger,
+        ServiceBusErrorSource source,
+        Exception exception);
 }

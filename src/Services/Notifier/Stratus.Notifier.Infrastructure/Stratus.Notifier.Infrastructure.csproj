@@ -11,5 +11,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- Declared directly although ILogger also arrives transitively: this
+         project uses it, and the [LoggerMessage] source generator ships in
+         this package's analyzer assets, which are PrivateAssets by default
+         and so are not guaranteed to flow in from a transitive reference. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 </Project>

@@ -30,7 +30,7 @@ public sealed class EventConsumer(
 
         if (string.IsNullOrWhiteSpace(ns) || string.IsNullOrWhiteSpace(hub))
         {
-            logger.LogWarning("Event Hubs is not configured; the projector is idle.");
+            EventConsumerLog.NotConfigured(logger);
             return;
         }
 
@@ -48,7 +48,7 @@ public sealed class EventConsumer(
             var @event = JsonSerializer.Deserialize<IntegrationEvent>(json);
             if (@event is null)
             {
-                logger.LogWarning("Skipping unparseable event at offset {Offset}.", partitionEvent.Data.Offset);
+                EventConsumerLog.UnparseableEvent(logger, partitionEvent.Data.OffsetString);
                 continue;
             }
 
@@ -57,4 +57,25 @@ public sealed class EventConsumer(
             await dispatcher.DispatchAsync(@event, stoppingToken).ConfigureAwait(false);
         }
     }
+}
+
+/// <summary>
+/// Source-generated logging — see ProjectorLog for the reasoning. The
+/// unparseable-event warning sits inside the consume loop, which is the
+/// hottest path in the service.
+/// </summary>
+internal static partial class EventConsumerLog
+{
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Event Hubs is not configured; the projector is idle.")]
+    public static partial void NotConfigured(ILogger logger);
+
+    // OffsetString, not Offset: the numeric Offset is [Obsolete] as of
+    // Azure.Messaging.EventHubs 5.12 — offsets are not numeric on every
+    // namespace — and an obsolete member is an error under
+    // TreatWarningsAsErrors. It is nullable when the event was not read
+    // from a partition, which cannot happen on this path but is typed so.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping unparseable event at offset {Offset}.")]
+    public static partial void UnparseableEvent(ILogger logger, string? offset);
 }

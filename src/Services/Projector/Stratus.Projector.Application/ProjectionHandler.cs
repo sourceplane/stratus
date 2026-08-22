@@ -37,7 +37,7 @@ public sealed class ProjectionDispatcher(
             // Not an error: a projector legitimately ignores most of the log,
             // and treating "nobody cared" as a failure would dead-letter the
             // majority of a healthy stream.
-            logger.LogDebug("No projection handles {Type}.", @event.Type);
+            ProjectorLog.NoProjectionHandles(logger, @event.Type);
             return Result<int>.Success(0);
         }
 
@@ -59,9 +59,27 @@ public sealed class TenantDirectoryProjection(ILogger<TenantDirectoryProjection>
     public Task ApplyAsync(IntegrationEvent @event, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
-        logger.LogInformation(
-            "Projecting {Type} for tenant {TenantId} into the tenant directory.",
-            @event.Type, @event.TenantId);
+        ProjectorLog.Projecting(logger, @event.Type, @event.TenantId);
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// Source-generated logging. Both call sites are per-event, so both are hot
+/// paths: the generator emits strongly-typed, allocation-free calls that skip
+/// argument evaluation entirely when the level is disabled. That satisfies
+/// CA1873 by construction rather than by suppression — a property access
+/// boxed into a params array was being evaluated whether or not anyone was
+/// listening, and LogDebug in particular is disabled in every environment
+/// that matters.
+/// </summary>
+internal static partial class ProjectorLog
+{
+    [LoggerMessage(Level = LogLevel.Debug, Message = "No projection handles {Type}.")]
+    public static partial void NoProjectionHandles(ILogger logger, string type);
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Projecting {Type} for tenant {TenantId} into the tenant directory.")]
+    public static partial void Projecting(ILogger logger, string type, Guid tenantId);
 }

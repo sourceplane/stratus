@@ -33,11 +33,21 @@ public sealed class NotificationHandler(
             return Error.Validation($"Unsupported command type '{command.Type}'.");
         }
 
-        logger.LogInformation("Delivering notification for tenant {TenantId}.", command.TenantId);
+        NotifierLog.Delivering(logger, command.TenantId);
         return await channel.DeliverAsync(
             recipient: command.TenantId.ToString(),
             subject: "Stratus notification",
             body: command.Payload,
             ct).ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// Source-generated logging: one call per command, so the argument must not be
+/// evaluated and boxed when the level is disabled (CA1873).
+/// </summary>
+internal static partial class NotifierLog
+{
+    [LoggerMessage(Level = LogLevel.Information, Message = "Delivering notification for tenant {TenantId}.")]
+    public static partial void Delivering(ILogger logger, Guid tenantId);
 }
