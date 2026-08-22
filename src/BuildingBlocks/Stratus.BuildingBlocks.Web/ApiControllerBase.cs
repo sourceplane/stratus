@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Stratus.BuildingBlocks.Web;
@@ -19,7 +20,7 @@ public abstract class ApiControllerBase : ControllerBase
 
         return result.IsSuccess
             ? Ok(map(result.Value))
-            : Problem(result.Error);
+            : ProblemFrom(result.Error);
     }
 
     protected ActionResult<TResponse> CreatedFromResult<TValue, TResponse>(
@@ -32,10 +33,10 @@ public abstract class ApiControllerBase : ControllerBase
 
         return result.IsSuccess
             ? Created(location(result.Value), map(result.Value))
-            : Problem(result.Error);
+            : ProblemFrom(result.Error);
     }
 
-    private ObjectResult Problem(Error error) => Problem(
+    private ObjectResult ProblemFrom(Error error) => Problem(
         detail: error.Message,
         statusCode: error.Kind switch
         {
