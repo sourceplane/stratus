@@ -64,13 +64,45 @@ public class TenantTests
     }
 
     [Fact]
-    public void Members_are_exposed_read_only()
+    public void Members_expose_no_mutator_on_their_compile_time_surface()
+    {
+        // The guarantee that matters is the DECLARED type: callers see
+        // IReadOnlyCollection<Membership>, which has no Add or Remove, so
+        // `tenant.Members.Add(...)` does not compile and membership changes
+        // must go through the aggregate.
+        //
+        // Asserting on the runtime type instead would be asserting on the
+        // wrong thing — ReadOnlyCollection<T> implements ICollection<T>
+        // explicitly, by BCL design, so it is assignable to it no matter how
+        // read-only the aggregate is.
+        var property = typeof(Tenant).GetProperty(nameof(Tenant.Members));
+
+        Assert.NotNull(property);
+        Assert.Equal(typeof(IReadOnlyCollection<Membership>), property.PropertyType);
+    }
+
+    [Fact]
+    public void Members_reject_mutation_through_a_cast()
     {
         var tenant = Tenant.Create("Acme", "acme", Clock).Value;
+        var member = tenant.AddMember(Guid.CreateVersion7(), "owner").Value;
 
-        // The collection is reachable but not mutable from outside: membership
-        // changes go through the aggregate so its rules cannot be bypassed.
-        Assert.IsNotAssignableFrom<ICollection<Membership>>(tenant.Members);
+        // The compile-time surface is the first line of defence; this is the
+        // second. A caller that casts its way to ICollection<T> must fail
+        // loudly rather than quietly bypass the aggregate's rules.
+        //
+        // Only the public API is used to obtain a Membership: the constructor
+        // seam is internal on purpose, and a test that needed InternalsVisibleTo
+        // to reach it would be widening the aggregate's surface to test that
+        // the surface is narrow.
+        var escaped = (ICollection<Membership>)tenant.Members;
+
+        // Statement lambdas with an explicit discard: Remove returns bool, and
+        // handing xUnit a value-returning lambda selects the Func<object>
+        // overload, which its analyzers reject.
+        Assert.Throws<NotSupportedException>(() => { _ = escaped.Remove(member); });
+        Assert.Throws<NotSupportedException>(() => escaped.Clear());
+        Assert.Single(tenant.Members);
     }
 
     private sealed class FixedClock : IClock
