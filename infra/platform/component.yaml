@@ -1,0 +1,31 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: platform
+  description: Container Apps Environment bound to Log Analytics, with Dapr enabled for Workflow
+spec:
+  type: terraform-azure
+  lifecycle: production
+  owner: platform
+  domain: stratus-infra
+  path: infra/platform
+  dependsOn:
+    - component: foundation
+    - component: data-plane
+    - component: messaging-plane
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    terraformVersion: "1.9.8"
+    stackName: platform
+    terraformDir: terraform
+    secretOutputs: "CONTAINER_APPS_ENVIRONMENT_ID=container_apps_environment_id"
+  labels:
+    team: platform
+    layer: infra

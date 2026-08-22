@@ -1,0 +1,28 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: foundation
+  description: Resource group, Log Analytics, App Insights, managed identities, federated credentials, ACR, Key Vault
+spec:
+  type: terraform-azure
+  lifecycle: production
+  owner: platform
+  domain: stratus-infra
+  path: infra/foundation
+
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    terraformVersion: "1.9.8"
+    stackName: foundation
+    terraformDir: terraform
+    secretOutputs: "ACR_NAME=acr_name,RESOURCE_GROUP=resource_group,LOG_ANALYTICS_ID=log_analytics_workspace_id,MANAGED_IDENTITY_CLIENT_ID=managed_identity_client_id"
+  labels:
+    team: platform
+    layer: infra

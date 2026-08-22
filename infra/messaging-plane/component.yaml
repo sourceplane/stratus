@@ -1,0 +1,29 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: messaging-plane
+  description: Event Hubs namespace (Kafka endpoint) and Service Bus namespace (AMQP)
+spec:
+  type: terraform-azure
+  lifecycle: production
+  owner: platform
+  domain: stratus-infra
+  path: infra/messaging-plane
+  dependsOn:
+    - component: foundation
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    terraformVersion: "1.9.8"
+    stackName: messaging-plane
+    terraformDir: terraform
+    secretOutputs: "EVENTHUBS_NAMESPACE=eventhubs_namespace,SERVICEBUS_NAMESPACE=servicebus_namespace"
+  labels:
+    team: platform
+    layer: infra

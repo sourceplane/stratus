@@ -1,0 +1,23 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: messaging
+  description: Shared library — Stratus.Messaging
+spec:
+  type: dotnet-package
+  lifecycle: production
+  owner: platform
+  domain: stratus-shared
+  path: src/shared/Messaging
+  subscribe:
+    environments:
+      - name: stage
+        profile: quick-check
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/shared/Messaging/Stratus.Messaging.csproj
+    testFilter: "FullyQualifiedName~Stratus.Messaging.Tests"
+  labels:
+    team: platform
+    layer: shared

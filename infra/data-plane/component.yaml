@@ -1,0 +1,29 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: data-plane
+  description: Postgres Flexible Server with Entra auth and PgBouncer, plus Azure Cache for Redis
+spec:
+  type: terraform-azure
+  lifecycle: production
+  owner: platform
+  domain: stratus-infra
+  path: infra/data-plane
+  dependsOn:
+    - component: foundation
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    terraformVersion: "1.9.8"
+    stackName: data-plane
+    terraformDir: terraform
+    secretOutputs: "POSTGRES_FQDN=postgres_fqdn,POSTGRES_DATABASE=postgres_database,REDIS_HOST=redis_host"
+  labels:
+    team: platform
+    layer: infra

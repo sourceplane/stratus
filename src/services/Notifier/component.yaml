@@ -1,0 +1,44 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: notifier
+  description: Service Bus consumer — command/work queue side (AMQP)
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  path: src/services/Notifier
+  dependsOn:
+    # Shared libraries this service BUNDLES. Declared so a change to one marks
+    # this service changed and redeploys it — without the edge, a plan keyed on
+    # `path:` alone lets a service run a months-old copy of a package that has
+    # since changed underneath it.
+    - component: contracts
+    - component: servicedefaults
+    - component: messaging
+
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/services/Notifier/Stratus.Notifier.csproj
+    testFilter: "FullyQualifiedName~Stratus.Notifier.Tests"
+    imageName: stratus/notifier
+    containerAppName: stratus-notifier-stage
+    appConfigTemplate: src/services/Notifier/appsettings.template.json
+    appConfig: src/services/Notifier/appsettings.Generated.json
+    wiringComponents: "data-plane,messaging-plane"
+    wiringEnvs: stage
+    wiringFixture: src/services/Notifier/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: notifier

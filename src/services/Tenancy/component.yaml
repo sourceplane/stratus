@@ -1,0 +1,44 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: tenancy
+  description: Organizations, members, invitations, RBAC, projects
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  path: src/services/Tenancy
+  dependsOn:
+    # Shared libraries this service BUNDLES. Declared so a change to one marks
+    # this service changed and redeploys it — without the edge, a plan keyed on
+    # `path:` alone lets a service run a months-old copy of a package that has
+    # since changed underneath it.
+    - component: contracts
+    - component: servicedefaults
+    - component: messaging
+    - component: identity
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/services/Tenancy/Stratus.Tenancy.csproj
+    testFilter: "FullyQualifiedName~Stratus.Tenancy.Tests"
+    imageName: stratus/tenancy
+    containerAppName: stratus-tenancy-stage
+    appConfigTemplate: src/services/Tenancy/appsettings.template.json
+    appConfig: src/services/Tenancy/appsettings.Generated.json
+    wiringComponents: "data-plane"
+    wiringEnvs: stage
+    wiringFixture: src/services/Tenancy/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: tenancy

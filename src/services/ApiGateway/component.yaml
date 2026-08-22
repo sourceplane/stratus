@@ -1,0 +1,46 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: api-gateway
+  description: Public entry — YARP reverse proxy, authn, rate limiting, idempotency
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  path: src/services/ApiGateway
+  dependsOn:
+    # Shared libraries this service BUNDLES. Declared so a change to one marks
+    # this service changed and redeploys it — without the edge, a plan keyed on
+    # `path:` alone lets a service run a months-old copy of a package that has
+    # since changed underneath it.
+    - component: contracts
+    - component: servicedefaults
+    - component: messaging
+    - component: identity
+    - component: tenancy
+    - component: billing
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/services/ApiGateway/Stratus.ApiGateway.csproj
+    testFilter: "FullyQualifiedName~Stratus.ApiGateway.Tests"
+    imageName: stratus/api-gateway
+    containerAppName: stratus-api-gateway-stage
+    appConfigTemplate: src/services/ApiGateway/appsettings.template.json
+    appConfig: src/services/ApiGateway/appsettings.Generated.json
+    wiringComponents: "data-plane"
+    wiringEnvs: stage
+    wiringFixture: src/services/ApiGateway/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: api-gateway

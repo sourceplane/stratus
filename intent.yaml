@@ -1,0 +1,100 @@
+apiVersion: sourceplane.io/v1
+kind: Intent
+
+metadata:
+  name: stratus
+  description: .NET multi-tenant SaaS baseline on Azure Container Apps
+  namespace: sourceplane
+
+execution:
+  state:
+    backendUrl: https://api-edge-prod.oruncloud.workers.dev
+    # Declared, enforced tenancy: the workspace claim rides every remote op
+    # (including the credential-free CI OIDC exchange) so orun-cloud can
+    # enforce claim ⊆ authorized.
+    workspace: ""
+    requireOrg: true
+    autopushCatalog: true
+
+compositions:
+  sources:
+    # The .NET/Azure composition stack, consumed as a published OCI artifact.
+    # Pin an explicit version: a bare repository reference resolves to :latest,
+    # which would let a catalog release change this repo's execution contracts
+    # without a commit here. Bumping the tag is the deliberate upgrade step.
+    - name: stack-basalt
+      kind: oci
+      ref: oci://ghcr.io/sourceplane/stack-basalt:0.1.0
+  resolution:
+    precedence:
+      - stack-basalt
+    bindings:
+      dotnet-service: stack-basalt
+      dotnet-package: stack-basalt
+      ef-migrate: stack-basalt
+      terraform-azure: stack-basalt
+
+discovery:
+  roots:
+    - src/
+    - infra/
+    - migrations/
+
+automation:
+  triggerBindings:
+    github-pull-request:
+      description: Pull request validation
+      on:
+        provider: github
+        event: pull_request
+        actions: [opened, synchronize, reopened, ready_for_review]
+        baseBranches: [main]
+      plan:
+        scope: changed
+        base: pull_request.base.sha
+        head: pull_request.head.sha
+
+    github-push-main:
+      description: Stack convergence after merge
+      on:
+        provider: github
+        event: push
+        branches: [main]
+
+    local-development:
+      description: Local planning
+      on:
+        provider: local
+
+environments:
+  # One environment for the walking skeleton. prod is an additive block once
+  # stage has proven every lane — the components are already
+  # environment-parameterised, so it costs an intent edit, not a refactor.
+  stage:
+    activation:
+      triggerRefs:
+        - github-pull-request
+        - github-push-main
+        - local-development
+    parameterDefaults:
+      # Shared, OPTIONAL values only. A schema-required parameter is declared on
+      # the component itself — environment defaults do not satisfy `required`,
+      # which `orun plan` enforces even though `orun component` does not.
+      dotnet-service:
+        acrName: ""
+        resourceGroup: ""
+        azureClientId: ""
+        azureTenantId: ""
+        azureSubscriptionId: ""
+      terraform-azure:
+        namespace: sourceplane
+        namespacePrefix: stg-
+        owner: sourceplane
+        repo: stratus
+        azureClientId: ""
+        azureTenantId: ""
+        azureSubscriptionId: ""
+    policies:
+      requireApproval: "false"
+    env:
+      ASPNETCORE_ENVIRONMENT: Staging

@@ -1,0 +1,9 @@
+bin/
+obj/
+artifacts/
+TestResults/
+.vs/
+*.user
+# Rendered from appsettings.template.json at deploy time — never committed.
+appsettings.Generated.json
+.orun/

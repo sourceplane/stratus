@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+# One workflow, and it only calls orun. Build tooling lives in the composition
+# stack, never here — a raw `dotnet build` step in Actions is how CI and the
+# deploy lane start to disagree.
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: sourceplane/orun-action@v1.2.0
+        with:
+          version: v2.53.2
+      - id: plan
+        run: orun plan --intent intent.yaml --changed --output-plan
+
+  run:
+    name: ${{ matrix.job.name }}
+    needs: plan
+    if: needs.plan.outputs.jobs != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job: ${{ fromJson(needs.plan.outputs.jobs) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sourceplane/orun-action@v1.2.0
+        with:
+          version: v2.53.2
+      - run: orun run ${{ needs.plan.outputs.plan }} --job ${{ matrix.job.id }}
