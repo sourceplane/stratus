@@ -6,15 +6,10 @@ metadata:
   description: .NET multi-tenant SaaS baseline on Azure Container Apps
   namespace: sourceplane
 
-execution:
-  state:
-    backendUrl: https://api-edge-prod.oruncloud.workers.dev
-    # Declared, enforced tenancy: the workspace claim rides every remote op
-    # (including the credential-free CI OIDC exchange) so orun-cloud can
-    # enforce claim ⊆ authorized.
-    workspace: ""
-    requireOrg: true
-    autopushCatalog: true
+# No `execution.state` block yet: this repo is not bound to an Orun Cloud
+# workspace, and declaring one with an empty id plus requireOrg would fail fast
+# on every non-interactive run. State stays local until the workspace exists,
+# at which point this block and CI's --remote-state flag land together.
 
 compositions:
   sources:

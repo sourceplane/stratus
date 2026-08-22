@@ -1,47 +1,95 @@
 name: CI
 
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request:
+
+# PR runs share a group per ref and superseded runs are cancelled (each push
+# re-plans anyway). Main pushes get a unique group: convergence plans --changed
+# per commit, and GitHub replaces *pending* runs in a shared group even with
+# cancel-in-progress false, which would leave a superseded commit's components
+# silently unconverged.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
+  packages: write
   id-token: write
-  packages: read
 
 # One workflow, and it only calls orun. Build tooling lives in the composition
-# stack, never here — a raw `dotnet build` step in Actions is how CI and the
-# deploy lane start to disagree.
+# stack — a raw `dotnet build` step here is how CI and the deploy lane start to
+# disagree about what "built" means.
 jobs:
   plan:
-    name: plan
     runs-on: ubuntu-latest
     outputs:
-      plan: ${{ steps.plan.outputs.plan }}
-      jobs: ${{ steps.plan.outputs.jobs }}
+      job-matrix: ${{ steps.matrix.outputs.job-matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: sourceplane/orun-action@v1.2.0
         with:
           version: v2.53.2
-      - id: plan
-        run: orun plan --intent intent.yaml --changed --output-plan
+      - run: |
+          set -euo pipefail
+          orun plan \
+            --from-ci github \
+            --event-file "$GITHUB_EVENT_PATH" \
+            --intent intent.yaml \
+            --output plan.json \
+            --changed
+      - id: matrix
+        run: |
+          echo "job-matrix=$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orun-plan
+          path: plan.json
 
   run:
-    name: ${{ matrix.job.name }}
     needs: plan
-    if: needs.plan.outputs.jobs != '[]'
     runs-on: ubuntu-latest
+    if: ${{ needs.plan.outputs.job-matrix != '[]' && needs.plan.outputs.job-matrix != '' }}
     strategy:
       fail-fast: false
       matrix:
-        job: ${{ fromJson(needs.plan.outputs.jobs) }}
+        include: ${{ fromJson(needs.plan.outputs.job-matrix) }}
+    name: ${{ matrix.job-name }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: orun-plan
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: sourceplane/orun-action@v1.2.0
         with:
           version: v2.53.2
-      - run: orun run ${{ needs.plan.outputs.plan }} --job ${{ matrix.job.id }}
+      # No --remote-state: this repo has no workspace binding yet, and the
+      # backend refuses a pull_request OIDC token by design. The verify profile
+      # builds and tests entirely offline, so a PR still gets real per-component
+      # verification and a green check. --remote-state lands with the workspace.
+      - run: |
+          set -euo pipefail
+          orun run \
+            --plan plan.json \
+            --runner github-actions \
+            --job "${{ matrix.job-id }}" \
+            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
