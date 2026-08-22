@@ -1,0 +1,15 @@
+{
+  "data-plane": {
+    "stage": {
+      "POSTGRES_FQDN": "localhost",
+      "POSTGRES_DATABASE": "stratus",
+      "REDIS_HOST": "localhost:6379"
+    }
+  },
+  "messaging-plane": {
+    "stage": {
+      "EVENTHUBS_NAMESPACE": "fixture-eventhubs",
+      "SERVICEBUS_NAMESPACE": "fixture-servicebus"
+    }
+  }
+}

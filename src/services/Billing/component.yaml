@@ -44,7 +44,7 @@ spec:
     containerAppName: stratus-billing-stage
     appConfigTemplate: src/services/Billing/appsettings.template.json
     appConfig: src/services/Billing/appsettings.Generated.json
-    wiringComponents: "data-plane"
+    wiringComponents: "data-plane,messaging-plane"
     wiringEnvs: stage
     wiringFixture: src/services/Billing/wiring.fixture.json
   labels:

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Identity</RootNamespace>
+    <AssemblyName>Stratus.Identity</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../shared/Contracts/Stratus.Contracts.csproj" />
+    <ProjectReference Include="../../shared/ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+    <ProjectReference Include="../../shared/Messaging/Stratus.Messaging.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+</Project>

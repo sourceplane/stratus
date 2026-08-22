@@ -44,7 +44,7 @@ spec:
     containerAppName: stratus-identity-stage
     appConfigTemplate: src/services/Identity/appsettings.template.json
     appConfig: src/services/Identity/appsettings.Generated.json
-    wiringComponents: "data-plane"
+    wiringComponents: "data-plane,messaging-plane"
     wiringEnvs: stage
     wiringFixture: src/services/Identity/wiring.fixture.json
   labels:

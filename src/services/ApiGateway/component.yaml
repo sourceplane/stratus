@@ -46,7 +46,7 @@ spec:
     containerAppName: stratus-api-gateway-stage
     appConfigTemplate: src/services/ApiGateway/appsettings.template.json
     appConfig: src/services/ApiGateway/appsettings.Generated.json
-    wiringComponents: "data-plane"
+    wiringComponents: "data-plane,messaging-plane"
     wiringEnvs: stage
     wiringFixture: src/services/ApiGateway/wiring.fixture.json
   labels:

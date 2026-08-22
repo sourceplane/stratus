@@ -44,7 +44,7 @@ spec:
     containerAppName: stratus-tenancy-stage
     appConfigTemplate: src/services/Tenancy/appsettings.template.json
     appConfig: src/services/Tenancy/appsettings.Generated.json
-    wiringComponents: "data-plane"
+    wiringComponents: "data-plane,messaging-plane"
     wiringEnvs: stage
     wiringFixture: src/services/Tenancy/wiring.fixture.json
   labels:

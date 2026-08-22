@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/shared/">
+    <Project Path="src/shared/Contracts/Stratus.Contracts.csproj" />
+    <Project Path="src/shared/ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+    <Project Path="src/shared/Messaging/Stratus.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/services/">
+    <Project Path="src/services/ApiGateway/Stratus.ApiGateway.csproj" />
+    <Project Path="src/services/Identity/Stratus.Identity.csproj" />
+    <Project Path="src/services/Tenancy/Stratus.Tenancy.csproj" />
+    <Project Path="src/services/Billing/Stratus.Billing.csproj" />
+    <Project Path="src/services/Notifier/Stratus.Notifier.csproj" />
+    <Project Path="src/services/Projector/Stratus.Projector.csproj" />
+  </Folder>
+  <Folder Name="/tooling/">
+    <Project Path="tooling/Wire/Stratus.Wire.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stratus.Tests/Stratus.Tests.csproj" />
+  </Folder>
+</Solution>

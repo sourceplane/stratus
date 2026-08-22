@@ -6,8 +6,9 @@ ARG PROJECT
 WORKDIR /src
 # Restore against the manifests first so a source-only change does not
 # invalidate the restore layer.
-COPY Directory.Build.props Directory.Packages.props Stratus.sln ./
+COPY Directory.Build.props Directory.Packages.props Stratus.slnx ./
 COPY src/ src/
+COPY tooling/ tooling/
 RUN dotnet restore "${PROJECT}"
 # The entry assembly is renamed to a constant so the final stage can use an
 # exec-form ENTRYPOINT. It has to be exec form: the chiseled runtime image ships
