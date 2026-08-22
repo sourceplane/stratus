@@ -31,7 +31,7 @@ public sealed class OutboxDispatcher<TContext>(
             {
                 // A transient publish failure must not kill the dispatcher: the
                 // rows stay undispatched and the next tick retries them.
-                logger.LogError(ex, "Outbox drain failed; retrying on the next tick.");
+                OutboxLog.DrainFailed(logger, ex);
             }
 
             try
@@ -81,8 +81,24 @@ public sealed class OutboxDispatcher<TContext>(
         await context.SaveChangesAsync(ct).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
 
-        logger.LogInformation("Dispatched {Count} outbox message(s).", batch.Count);
+        OutboxLog.Dispatched(logger, batch.Count);
     }
+}
+
+/// <summary>
+/// Source-generated logging. The dispatcher logs on every drain tick, so this
+/// is a hot path: the generator emits strongly-typed, allocation-free calls
+/// that skip argument evaluation entirely when the level is disabled. That is
+/// also what CA1873 asks for — the boxed `int` in a params array was evaluated
+/// whether or not anyone was listening.
+/// </summary>
+internal static partial class OutboxLog
+{
+    [LoggerMessage(Level = LogLevel.Information, Message = "Dispatched {Count} outbox message(s).")]
+    public static partial void Dispatched(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Outbox drain failed; retrying on the next tick.")]
+    public static partial void DrainFailed(ILogger logger, Exception exception);
 }
 
 /// <summary>
