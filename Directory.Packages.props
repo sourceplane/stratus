@@ -5,6 +5,14 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Transitive-vulnerability pin (NU1903). Something in the EF Core /
+         Azure.Identity graph drags in 9.0.0, which carries eight known high
+         severity advisories. Pinning the patched version here overrides the
+         transitive resolution for every project. The audit gate stays ON —
+         silencing NU1903 would trade a real security signal for a green
+         build, which is the wrong way round. -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.0" />
+
     <!-- Data -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
