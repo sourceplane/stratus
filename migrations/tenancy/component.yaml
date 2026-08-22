@@ -11,7 +11,14 @@ spec:
   path: migrations/tenancy
   dependsOn:
     - component: tenancy
-  secretEnv:
+  # Best-effort, NOT secretEnv — same reasoning as the services. The
+  # plan-only profile builds the bundle, prints the SQL and rehearses it
+  # against a throwaway Postgres; it never opens a connection to the
+  # environment. A component-level secretEnv is profile-blind, so
+  # declaring the connection there made the PR gate fail closed on a
+  # credential only the apply lane uses. The apply step asserts the
+  # variable is non-empty before running the bundle.
+  optionalSecretEnv:
     DATABASE_CONNECTION_STRING: "secret://stratus/stratus/{{ .environment }}/TENANCY_DATABASE_CONNECTION_STRING"
   subscribe:
     environments:

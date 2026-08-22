@@ -120,15 +120,25 @@ jobs:
           orun run \
             --plan plan.json \
             --runner github-actions \
-            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}" \
-            2>&1 | tee run.log
-
-          # A job left waiting is the failure mode above. Assert it cannot
-          # recur silently.
-          if grep -qE "^[[:space:]]*[0-9]+ waiting" run.log; then
-            echo "converge: a job finished in the waiting state — dependencies were not satisfied in this runner" >&2
-            exit 1
-          fi
+            --exec-id "${EXEC_ID}"
         env:
+          EXEC_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `orun run` exits 0 when jobs finish WAITING, so its exit code alone
+      # cannot answer "did the fleet build". This reads the sealed execution
+      # state and asserts every planned job reached `completed`. It runs even
+      # when converge failed, so a partial run reports what did not execute
+      # rather than only what broke. The script is negative-tested — see its
+      # header for why the first version of this gate could never have fired.
+      - name: assert every planned job ran
+        if: always()
+        run: |
+          set -euo pipefail
+          orun status --exec-id "${EXEC_ID}" --json > state.json
+          ./scripts/assert-converged.sh plan.json state.json
+        env:
+          EXEC_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

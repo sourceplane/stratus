@@ -16,9 +16,19 @@ spec:
     - component: servicedefaults
     - component: contracts
     - component: messaging
-  secretEnv:
-    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  # Best-effort, NOT secretEnv. A component's secretEnv is profile-blind: it is
+  # resolved for every job the component plans, so declaring a deploy credential
+  # there makes the verify lane — which never deploys — fail closed on a secret
+  # it has no use for. That is what broke the fleet build. The profile-scoped
+  # mechanism is the composition's per-profile secretBindings, but a required
+  # binding must be mappable to a workspace/project scope at plan time and this
+  # repo has no workspace binding yet; it lands with execution.state.
+  #
+  # Nothing is weakened by the move: the deploy-coolify step asserts the token
+  # is non-empty before it calls Coolify, so the deploy lane still fails loudly,
+  # at the step that actually needs it.
   optionalSecretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
     GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
   subscribe:
     environments:
