@@ -36,7 +36,7 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
-      job-matrix: ${{ steps.matrix.outputs.job-matrix }}
+      job-count: ${{ steps.matrix.outputs.job-count }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,9 +73,9 @@ jobs:
             echo "plan wrote no plan.json — did any trigger binding match this event?" >&2
             exit 1
           }
-          matrix="$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)"
-          echo "planned $(jq '.jobs | length' plan.json) job(s)"
-          echo "job-matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          count="$(jq '.jobs | length' plan.json)"
+          echo "planned ${count} job(s)"
+          echo "job-count=${count}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: orun-plan
@@ -84,12 +84,8 @@ jobs:
   run:
     needs: plan
     runs-on: ubuntu-latest
-    if: ${{ needs.plan.outputs.job-matrix != '[]' && needs.plan.outputs.job-matrix != '' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.plan.outputs.job-matrix) }}
-    name: ${{ matrix.job-name }}
+    if: needs.plan.outputs.job-count != '0'
+    name: converge
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -104,17 +100,35 @@ jobs:
       - uses: sourceplane/orun-action@v1.2.0
         with:
           version: v2.53.2
-      # No --remote-state: this repo has no workspace binding yet, and the
-      # backend refuses a pull_request OIDC token by design. The verify profile
-      # builds and tests entirely offline, so a PR still gets real per-component
-      # verification and a green check. --remote-state lands with the workspace.
-      - run: |
+
+      # ONE job runs the WHOLE plan, in dependency order.
+      #
+      # This was a matrix fanning out one GitHub job per component, and it was
+      # silently useless: each runner has its own LOCAL orun state, so a job
+      # could never observe that its dependency had completed on a different
+      # runner. Every component with a dependsOn edge reported "waiting",
+      # executed zero steps, and exited 0 — a fully green run in which only the
+      # six dependency-free components actually built.
+      #
+      # Cross-runner coordination is exactly what --remote-state provides, and
+      # this repo has no workspace binding yet. Until it does, converging the
+      # plan in a single runner is the honest option: slower, correct, and
+      # incapable of reporting success for work it did not do.
+      - name: converge
+        run: |
           set -euo pipefail
           orun run \
             --plan plan.json \
             --runner github-actions \
-            --job "${{ matrix.job-id }}" \
-            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}"
+            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            2>&1 | tee run.log
+
+          # A job left waiting is the failure mode above. Assert it cannot
+          # recur silently.
+          if grep -qE "^[[:space:]]*[0-9]+ waiting" run.log; then
+            echo "converge: a job finished in the waiting state — dependencies were not satisfied in this runner" >&2
+            exit 1
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
