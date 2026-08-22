@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Notifier.Tests</RootNamespace>
+    <AssemblyName>Stratus.Notifier.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Application only. The handler's rules are testable without a broker,
+         which is the point of keeping delivery behind a port. -->
+    <ProjectReference Include="../../src/Services/Notifier/Stratus.Notifier.Application/Stratus.Notifier.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

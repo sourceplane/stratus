@@ -41,8 +41,14 @@ spec:
   parameters:
     dotnetVersion: "10.0.x"
     solutionDir: ../../..
+    # This service's OWN tests, named as a project rather than selected
+    # with --filter over the solution. A filter that matches nothing still
+    # exits 0, so a typo would produce a green run that tested nothing; a
+    # wrong project path fails with MSB1009, and TreatNoTestsAsError turns
+    # an empty project into a failure too. Before this, the three services
+    # with no filter each ran the entire solution suite.
+    testCommand: "dotnet test tests/Stratus.Projector.Tests/Stratus.Projector.Tests.csproj --configuration Release --no-restore -- RunConfiguration.TreatNoTestsAsError=true"
     projectPath: src/Services/Projector/Stratus.Projector.Host/Stratus.Projector.Host.csproj
-    testFilter: ""
     imageName: stratus/projector
     containerAppName: stratus-projector-stage
     coolifyAppUuid: ""

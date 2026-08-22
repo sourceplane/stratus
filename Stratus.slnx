@@ -39,6 +39,8 @@
     <Project Path="tests/Stratus.Architecture.Tests/Stratus.Architecture.Tests.csproj" />
     <Project Path="tests/Stratus.Billing.Tests/Stratus.Billing.Tests.csproj" />
     <Project Path="tests/Stratus.Identity.Tests/Stratus.Identity.Tests.csproj" />
+    <Project Path="tests/Stratus.Notifier.Tests/Stratus.Notifier.Tests.csproj" />
+    <Project Path="tests/Stratus.Projector.Tests/Stratus.Projector.Tests.csproj" />
     <Project Path="tests/Stratus.Tenancy.Tests/Stratus.Tenancy.Tests.csproj" />
   </Folder>
 </Solution>
