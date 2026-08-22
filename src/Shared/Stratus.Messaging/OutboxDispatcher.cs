@@ -92,12 +92,13 @@ public sealed class OutboxDispatcher<TContext>(
 /// </summary>
 public static class Idempotency
 {
-    public static async Task<bool> OnceAsync(
-        IOutboxDbContext context,
+    public static async Task<bool> OnceAsync<TContext>(
+        TContext context,
         Guid messageId,
         string consumer,
         Func<Task> handler,
         CancellationToken ct = default)
+        where TContext : DbContext, IOutboxDbContext
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(handler);

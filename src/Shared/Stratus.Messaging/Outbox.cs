@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Stratus.BuildingBlocks;
 
 namespace Stratus.Messaging;
@@ -37,16 +36,18 @@ public sealed class ProcessedMessage
 /// The contract a service's DbContext honours to take part in the outbox.
 /// Implemented by Infrastructure; the dispatcher depends on this and never on
 /// any concrete context.
+///
+/// Deliberately narrow: it declares ONLY the outbox's own sets. Re-declaring
+/// SaveChangesAsync or Database here would make every call on a
+/// `where T : DbContext, IOutboxDbContext` type parameter ambiguous between
+/// the two constraints (CS0229) — the dispatcher gets those members from
+/// DbContext, and this interface adds only what DbContext lacks.
 /// </summary>
 public interface IOutboxDbContext
 {
     DbSet<OutboxMessage> Outbox { get; }
 
     DbSet<ProcessedMessage> ProcessedMessages { get; }
-
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-
-    DatabaseFacade Database { get; }
 }
 
 /// <summary>
