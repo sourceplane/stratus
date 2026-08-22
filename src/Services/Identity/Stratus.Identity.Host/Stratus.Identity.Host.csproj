@@ -12,5 +12,15 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Design-time only, and required HERE rather than only on
+         Infrastructure: `dotnet ef` resolves its services from the STARTUP
+         project, and this package is marked PrivateAssets=all downstream so
+         it does not flow in from the project reference. Without it the
+         ef-migrate bundle step cannot build a migration at all. It ships no
+         runtime asset, so the container is unchanged. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

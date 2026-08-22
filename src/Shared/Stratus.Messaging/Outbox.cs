@@ -85,6 +85,12 @@ public static class OutboxModel
             e.Property(x => x.Type).HasMaxLength(200).IsRequired();
             // The dispatcher only ever scans undispatched rows; a full index
             // would grow without bound serving a query nobody runs.
+            //
+            // The filter is raw SQL, so it depends on UseSnakeCaseColumns
+            // having run: Postgres folds an unquoted identifier to lower case,
+            // and EF's default column name is the quoted, case-SENSITIVE
+            // "DispatchedAt". Without the convention this filter names a
+            // column that does not exist and the migration fails to apply.
             e.HasIndex(x => x.CreatedAt).HasFilter("dispatched_at IS NULL");
         });
 

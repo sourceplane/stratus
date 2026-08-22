@@ -41,6 +41,12 @@ public sealed class TenancyDbContext(DbContextOptions<TenancyDbContext> options)
 
         modelBuilder.ApplyOutbox();
 
+        // LAST, so it sees every entity above. Postgres folds unquoted
+        // identifiers to lower case while EF quotes PascalCase ones, so raw
+        // SQL and the default mapping silently disagree; this settles it in
+        // one place for the whole context.
+        modelBuilder.UseSnakeCaseColumns();
+
         base.OnModelCreating(modelBuilder);
     }
 }

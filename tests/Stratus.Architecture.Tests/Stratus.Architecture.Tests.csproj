@@ -10,7 +10,9 @@
     <ProjectReference Include="../../src/Services/Identity/Stratus.Identity.Infrastructure/Stratus.Identity.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Services/Identity/Stratus.Identity.Web/Stratus.Identity.Web.csproj" />
     <ProjectReference Include="../../src/Services/Tenancy/Stratus.Tenancy.Domain/Stratus.Tenancy.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Tenancy/Stratus.Tenancy.Infrastructure/Stratus.Tenancy.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Services/Billing/Stratus.Billing.Domain/Stratus.Billing.Domain.csproj" />
+    <ProjectReference Include="../../src/Services/Billing/Stratus.Billing.Infrastructure/Stratus.Billing.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

@@ -1,0 +1,13 @@
+root = true
+
+# EF Core migrations are tool output, not hand-written code. `dotnet ef
+# migrations add` regenerates them wholesale, so an analyzer fix applied here
+# is silently reverted by the next migration — and the fix would be pointless
+# anyway: CA1861 ("prefer static readonly over constant array arguments")
+# is about repeated calls in a hot path, and a migration's Up() runs once, ever.
+#
+# `generated_code = true` is the supported lever: .NET analyzers read it and
+# skip the file entirely, so this does not weaken any rule for code we actually
+# write. Blanket-disabling CA1861 in Directory.Build.props would have.
+[**/Migrations/*.cs]
+generated_code = true
