@@ -18,12 +18,19 @@ spec:
     - component: servicedefaults
     - component: messaging
 
+  # The Coolify API token, wire-now-seed-later: an unseeded key is skipped at
+  # resolve, so this block is inert until the value exists in orun secrets.
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+
   subscribe:
     environments:
       - name: stage
         profile: verify
         profileRules:
-          - profile: deploy
+          - profile: deploy-coolify
             when:
               triggerRef: github-push-main
   parameters:
@@ -31,6 +38,8 @@ spec:
     solutionDir: ../../..
     projectPath: src/services/Projector/Stratus.Projector.csproj
     testFilter: "FullyQualifiedName~Stratus.Projector.Tests"
+    coolifyAppUuid: ""
+    serviceUrl: ""
     imageName: stratus/projector
     containerAppName: stratus-projector-stage
     appConfigTemplate: src/services/Projector/appsettings.template.json

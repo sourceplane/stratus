@@ -20,12 +20,19 @@ spec:
     - component: identity
     - component: tenancy
     - component: billing
+  # The Coolify API token, wire-now-seed-later: an unseeded key is skipped at
+  # resolve, so this block is inert until the value exists in orun secrets.
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+
   subscribe:
     environments:
       - name: stage
         profile: verify
         profileRules:
-          - profile: deploy
+          - profile: deploy-coolify
             when:
               triggerRef: github-push-main
   parameters:
@@ -33,6 +40,8 @@ spec:
     solutionDir: ../../..
     projectPath: src/services/ApiGateway/Stratus.ApiGateway.csproj
     testFilter: "FullyQualifiedName~Stratus.ApiGateway.Tests"
+    coolifyAppUuid: ""
+    serviceUrl: ""
     imageName: stratus/api-gateway
     containerAppName: stratus-api-gateway-stage
     appConfigTemplate: src/services/ApiGateway/appsettings.template.json

@@ -24,7 +24,7 @@ compositions:
     # without a commit here. Bumping the tag is the deliberate upgrade step.
     - name: stack-basalt
       kind: oci
-      ref: oci://ghcr.io/sourceplane/stack-basalt:0.1.0
+      ref: oci://ghcr.io/sourceplane/stack-basalt:0.2.0
   resolution:
     precedence:
       - stack-basalt
@@ -81,6 +81,13 @@ environments:
       # the component itself — environment defaults do not satisfy `required`,
       # which `orun plan` enforces even though `orun component` does not.
       dotnet-service:
+        # Coolify is the small baseline's target: one bearer token instead of
+        # an Entra app registration plus a federated-identity trust, and real
+        # Kafka/RabbitMQ/Postgres as first-class services beside it. The Azure
+        # Container Apps path stays in the catalog for the sophisticated
+        # baseline — it is a profile choice, not a fork of the repo.
+        registry: ghcr.io/sourceplane
+        coolifyUrl: ""
         acrName: ""
         resourceGroup: ""
         azureClientId: ""
