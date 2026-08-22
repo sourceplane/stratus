@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Identity.Domain</RootNamespace>
+    <AssemblyName>Stratus.Identity.Domain</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The ONLY reference a Domain project may carry. No EF Core, no ASP.NET,
+         no messaging: the innermost layer must be able to compile with nothing
+         but the language. -->
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.BuildingBlocks/Stratus.BuildingBlocks.csproj" />
+  </ItemGroup>
+</Project>

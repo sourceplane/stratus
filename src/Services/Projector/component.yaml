@@ -1,0 +1,48 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: projector
+  description: Event Hubs consumer — read-model projections (Kafka protocol)
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  # One component per SERVICE, not per project. A component is a deploy unit;
+  # the five layers inside build together and ship as one container.
+  path: src/Services/Projector
+  dependsOn:
+    - component: buildingblocks
+    - component: servicedefaults
+    - component: contracts
+    - component: messaging
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy-coolify
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/Services/Projector/Stratus.Projector.Host/Stratus.Projector.Host.csproj
+    testFilter: ""
+    imageName: stratus/projector
+    containerAppName: stratus-projector-stage
+    coolifyAppUuid: ""
+    serviceUrl: ""
+    appConfigTemplate: src/Services/Projector/appsettings.template.json
+    appConfig: src/Services/Projector/Stratus.Projector.Host/appsettings.Generated.json
+    wiringComponents: "data-plane,messaging-plane"
+    wiringEnvs: stage
+    wiringFixture: src/Services/Projector/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: projector

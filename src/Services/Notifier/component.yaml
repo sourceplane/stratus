@@ -1,0 +1,48 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: notifier
+  description: Service Bus consumer — commands and work queues (AMQP)
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  # One component per SERVICE, not per project. A component is a deploy unit;
+  # the five layers inside build together and ship as one container.
+  path: src/Services/Notifier
+  dependsOn:
+    - component: buildingblocks
+    - component: servicedefaults
+    - component: contracts
+    - component: messaging
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy-coolify
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/Services/Notifier/Stratus.Notifier.Host/Stratus.Notifier.Host.csproj
+    testFilter: ""
+    imageName: stratus/notifier
+    containerAppName: stratus-notifier-stage
+    coolifyAppUuid: ""
+    serviceUrl: ""
+    appConfigTemplate: src/Services/Notifier/appsettings.template.json
+    appConfig: src/Services/Notifier/Stratus.Notifier.Host/appsettings.Generated.json
+    wiringComponents: "data-plane,messaging-plane"
+    wiringEnvs: stage
+    wiringFixture: src/Services/Notifier/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: notifier

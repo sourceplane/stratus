@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Contracts</RootNamespace>
+    <AssemblyName>Stratus.Contracts</AssemblyName>
+  </PropertyGroup>
+</Project>

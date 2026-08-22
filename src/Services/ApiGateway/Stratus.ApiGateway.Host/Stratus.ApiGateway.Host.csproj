@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.ApiGateway.Host</RootNamespace>
+    <AssemblyName>Stratus.ApiGateway.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- No Domain, Application or Infrastructure: a reverse proxy that grew a
+         business-logic layer would be a monolith with extra steps. -->
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" />
+  </ItemGroup>
+</Project>

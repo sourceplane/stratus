@@ -1,0 +1,78 @@
+using System.Text.Json;
+using Azure.Identity;
+using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Stratus.Contracts;
+using Stratus.Notifier.Application;
+
+namespace Stratus.Notifier.Infrastructure;
+
+/// <summary>
+/// The command side: Service Bus over AMQP 1.0 — queues, sessions, scheduled
+/// delivery and a native dead-letter queue. The RabbitMQ role.
+/// </summary>
+public sealed class CommandConsumer(
+    IConfiguration configuration,
+    IServiceScopeFactory scopes,
+    ILogger<CommandConsumer> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var ns = configuration["Messaging:ServiceBusNamespace"];
+        var queue = configuration["Messaging:CommandQueueName"];
+
+        if (string.IsNullOrWhiteSpace(ns) || string.IsNullOrWhiteSpace(queue))
+        {
+            // Idle rather than crash-looping: an unconfigured broker is a
+            // deployment state, and a restart loop hides it.
+            logger.LogWarning("Service Bus is not configured; the command consumer is idle.");
+            return;
+        }
+
+        await using var client = new ServiceBusClient(
+            $"{ns}.servicebus.windows.net", new DefaultAzureCredential());
+        await using var processor = client.CreateProcessor(queue, new ServiceBusProcessorOptions
+        {
+            AutoCompleteMessages = false,
+            MaxConcurrentCalls = 4,
+        });
+
+        processor.ProcessMessageAsync += async args =>
+        {
+            var command = JsonSerializer.Deserialize<IntegrationCommand>(args.Message.Body.ToString());
+            if (command is null)
+            {
+                await args.DeadLetterMessageAsync(
+                    args.Message, "unparseable", "Body is not an IntegrationCommand").ConfigureAwait(false);
+                return;
+            }
+
+            using var scope = scopes.CreateScope();
+            var handler = scope.ServiceProvider.GetRequiredService<INotificationHandler>();
+            var result = await handler.HandleAsync(command, args.CancellationToken).ConfigureAwait(false);
+
+            if (!result.IsSuccess)
+            {
+                await args.DeadLetterMessageAsync(
+                    args.Message, result.Error.Code, result.Error.Message).ConfigureAwait(false);
+                return;
+            }
+
+            await args.CompleteMessageAsync(args.Message, args.CancellationToken).ConfigureAwait(false);
+        };
+
+        processor.ProcessErrorAsync += error =>
+        {
+            logger.LogError(error.Exception, "Service Bus processor error in {Source}.", error.ErrorSource);
+            return Task.CompletedTask;
+        };
+
+        await processor.StartProcessingAsync(stoppingToken).ConfigureAwait(false);
+        await Task.Delay(Timeout.Infinite, stoppingToken)
+            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        await processor.StopProcessingAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+}

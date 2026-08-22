@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Identity.Host</RootNamespace>
+    <AssemblyName>Stratus.Identity.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The composition root, and the ONLY project allowed to see both Web and
+         Infrastructure. Every other reference in this service points inward. -->
+    <ProjectReference Include="../Stratus.Identity.Web/Stratus.Identity.Web.csproj" />
+    <ProjectReference Include="../Stratus.Identity.Infrastructure/Stratus.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+</Project>

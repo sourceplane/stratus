@@ -1,0 +1,32 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: migrations-tenancy
+  description: EF Core migrations for the Tenancy bounded context
+spec:
+  type: ef-migrate
+  lifecycle: production
+  owner: platform
+  domain: stratus-data
+  path: migrations/tenancy
+  dependsOn:
+    - component: tenancy
+  secretEnv:
+    DATABASE_CONNECTION_STRING: "secret://stratus/stratus/{{ .environment }}/TENANCY_DATABASE_CONNECTION_STRING"
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../..
+    projectPath: src/Services/Tenancy/Stratus.Tenancy.Infrastructure/Stratus.Tenancy.Infrastructure.csproj
+    startupProject: src/Services/Tenancy/Stratus.Tenancy.Host/Stratus.Tenancy.Host.csproj
+    bundleOutput: artifacts/migrate/tenancy
+  labels:
+    team: platform
+    layer: data

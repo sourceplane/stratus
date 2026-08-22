@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Identity.Application</RootNamespace>
+    <AssemblyName>Stratus.Identity.Application</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stratus.Identity.Domain/Stratus.Identity.Domain.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.BuildingBlocks/Stratus.BuildingBlocks.csproj" />
+    <ProjectReference Include="../../../Shared/Stratus.Contracts/Stratus.Contracts.csproj" />
+  </ItemGroup>
+</Project>

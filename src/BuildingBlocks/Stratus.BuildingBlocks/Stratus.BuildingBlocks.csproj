@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.BuildingBlocks</RootNamespace>
+    <AssemblyName>Stratus.BuildingBlocks</AssemblyName>
+  </PropertyGroup>
+</Project>

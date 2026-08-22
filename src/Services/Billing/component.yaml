@@ -1,0 +1,50 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: billing
+  description: Plans, subscriptions and entitlements
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  # One component per SERVICE, not per project. A component is a deploy unit;
+  # the five layers inside build together and ship as one container.
+  path: src/Services/Billing
+  dependsOn:
+    - component: buildingblocks
+    - component: servicedefaults
+    - component: contracts
+    - component: messaging
+    - component: buildingblocks-web
+    - component: tenancy
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy-coolify
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/Services/Billing/Stratus.Billing.Host/Stratus.Billing.Host.csproj
+    testFilter: "FullyQualifiedName~Stratus.Billing.Tests"
+    imageName: stratus/billing
+    containerAppName: stratus-billing-stage
+    coolifyAppUuid: ""
+    serviceUrl: ""
+    appConfigTemplate: src/Services/Billing/appsettings.template.json
+    appConfig: src/Services/Billing/Stratus.Billing.Host/appsettings.Generated.json
+    wiringComponents: "data-plane,messaging-plane"
+    wiringEnvs: stage
+    wiringFixture: src/Services/Billing/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: billing

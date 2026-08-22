@@ -1,0 +1,32 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: migrations-identity
+  description: EF Core migrations for the Identity bounded context
+spec:
+  type: ef-migrate
+  lifecycle: production
+  owner: platform
+  domain: stratus-data
+  path: migrations/identity
+  dependsOn:
+    - component: identity
+  secretEnv:
+    DATABASE_CONNECTION_STRING: "secret://stratus/stratus/{{ .environment }}/IDENTITY_DATABASE_CONNECTION_STRING"
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../..
+    projectPath: src/Services/Identity/Stratus.Identity.Infrastructure/Stratus.Identity.Infrastructure.csproj
+    startupProject: src/Services/Identity/Stratus.Identity.Host/Stratus.Identity.Host.csproj
+    bundleOutput: artifacts/migrate/identity
+  labels:
+    team: platform
+    layer: data

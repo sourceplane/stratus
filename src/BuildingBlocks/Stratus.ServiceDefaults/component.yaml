@@ -1,0 +1,23 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: servicedefaults
+  description: OpenTelemetry, health checks and resilience, wired once for the fleet
+spec:
+  type: dotnet-package
+  lifecycle: production
+  owner: platform
+  domain: stratus-shared
+  path: src/BuildingBlocks/Stratus.ServiceDefaults
+  subscribe:
+    environments:
+      - name: stage
+        profile: quick-check
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj
+    testFilter: ""
+  labels:
+    team: platform
+    layer: shared

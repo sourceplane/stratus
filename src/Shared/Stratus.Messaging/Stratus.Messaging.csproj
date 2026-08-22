@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Messaging</RootNamespace>
+    <AssemblyName>Stratus.Messaging</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../BuildingBlocks/Stratus.BuildingBlocks/Stratus.BuildingBlocks.csproj" />
+    <ProjectReference Include="../Stratus.Contracts/Stratus.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Native SDKs, no broker framework: Event Hubs over its Kafka
+         wire-protocol endpoint, Service Bus over AMQP 1.0. The programming
+         model is Kafka's and RabbitMQ's, with no licence and no abstraction
+         that flattens the difference between them. -->
+    <PackageReference Include="Azure.Messaging.EventHubs" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+</Project>

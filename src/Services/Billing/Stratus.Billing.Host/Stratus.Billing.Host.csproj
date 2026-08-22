@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Billing.Host</RootNamespace>
+    <AssemblyName>Stratus.Billing.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stratus.Billing.Web/Stratus.Billing.Web.csproj" />
+    <ProjectReference Include="../Stratus.Billing.Infrastructure/Stratus.Billing.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Notifier.Host</RootNamespace>
+    <AssemblyName>Stratus.Notifier.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stratus.Notifier.Infrastructure/Stratus.Notifier.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>

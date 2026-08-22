@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Tenancy.Host</RootNamespace>
+    <AssemblyName>Stratus.Tenancy.Host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stratus.Tenancy.Web/Stratus.Tenancy.Web.csproj" />
+    <ProjectReference Include="../Stratus.Tenancy.Infrastructure/Stratus.Tenancy.Infrastructure.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+</Project>

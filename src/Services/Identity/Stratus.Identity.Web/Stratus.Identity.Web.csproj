@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.Identity.Web</RootNamespace>
+    <AssemblyName>Stratus.Identity.Web</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The web layer depends on Application ONLY. It cannot see
+         Infrastructure, so a controller physically cannot reach a DbContext. -->
+    <ProjectReference Include="../Stratus.Identity.Application/Stratus.Identity.Application.csproj" />
+    <ProjectReference Include="../../../BuildingBlocks/Stratus.BuildingBlocks.Web/Stratus.BuildingBlocks.Web.csproj" />
+  </ItemGroup>
+</Project>

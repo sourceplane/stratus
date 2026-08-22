@@ -1,0 +1,47 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: api-gateway
+  description: Public entry — YARP reverse proxy, per-tenant rate limiting
+spec:
+  type: dotnet-service
+  lifecycle: production
+  owner: platform
+  domain: stratus-runtime
+  # One component per SERVICE, not per project. A component is a deploy unit;
+  # the five layers inside build together and ship as one container.
+  path: src/Services/ApiGateway
+  dependsOn:
+    - component: buildingblocks
+    - component: servicedefaults
+
+  secretEnv:
+    COOLIFY_TOKEN: "secret://stratus/stratus/{{ .environment }}/COOLIFY_TOKEN"
+  optionalSecretEnv:
+    GHCR_TOKEN: "secret://stratus/stratus/{{ .environment }}/GHCR_TOKEN"
+  subscribe:
+    environments:
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy-coolify
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/Services/ApiGateway/Stratus.ApiGateway.Host/Stratus.ApiGateway.Host.csproj
+    testFilter: ""
+    imageName: stratus/api-gateway
+    containerAppName: stratus-api-gateway-stage
+    coolifyAppUuid: ""
+    serviceUrl: ""
+    appConfigTemplate: src/Services/ApiGateway/appsettings.template.json
+    appConfig: src/Services/ApiGateway/Stratus.ApiGateway.Host/appsettings.Generated.json
+    wiringComponents: "data-plane,messaging-plane"
+    wiringEnvs: stage
+    wiringFixture: src/Services/ApiGateway/wiring.fixture.json
+  labels:
+    team: platform
+    layer: runtime
+    surface: api-gateway

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Stratus.BuildingBlocks.Web</RootNamespace>
+    <AssemblyName>Stratus.BuildingBlocks.Web</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stratus.BuildingBlocks/Stratus.BuildingBlocks.csproj" />
+  </ItemGroup>
+</Project>

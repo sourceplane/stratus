@@ -1,0 +1,23 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: buildingblocks-web
+  description: Shared web layer — ApiControllerBase and the Result-to-ProblemDetails mapping
+spec:
+  type: dotnet-package
+  lifecycle: production
+  owner: platform
+  domain: stratus-shared
+  path: src/BuildingBlocks/Stratus.BuildingBlocks.Web
+  subscribe:
+    environments:
+      - name: stage
+        profile: quick-check
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/BuildingBlocks/Stratus.BuildingBlocks.Web/Stratus.BuildingBlocks.Web.csproj
+    testFilter: ""
+  labels:
+    team: platform
+    layer: shared

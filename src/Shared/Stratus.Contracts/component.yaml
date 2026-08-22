@@ -1,0 +1,23 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: contracts
+  description: Integration event and command envelopes — the frozen wire contract
+spec:
+  type: dotnet-package
+  lifecycle: production
+  owner: platform
+  domain: stratus-shared
+  path: src/Shared/Stratus.Contracts
+  subscribe:
+    environments:
+      - name: stage
+        profile: quick-check
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../../..
+    projectPath: src/Shared/Stratus.Contracts/Stratus.Contracts.csproj
+    testFilter: ""
+  labels:
+    team: platform
+    layer: shared

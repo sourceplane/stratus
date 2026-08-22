@@ -1,0 +1,32 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: migrations-billing
+  description: EF Core migrations for the Billing bounded context
+spec:
+  type: ef-migrate
+  lifecycle: production
+  owner: platform
+  domain: stratus-data
+  path: migrations/billing
+  dependsOn:
+    - component: billing
+  secretEnv:
+    DATABASE_CONNECTION_STRING: "secret://stratus/stratus/{{ .environment }}/BILLING_DATABASE_CONNECTION_STRING"
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+  parameters:
+    dotnetVersion: "10.0.x"
+    solutionDir: ../..
+    projectPath: src/Services/Billing/Stratus.Billing.Infrastructure/Stratus.Billing.Infrastructure.csproj
+    startupProject: src/Services/Billing/Stratus.Billing.Host/Stratus.Billing.Host.csproj
+    bundleOutput: artifacts/migrate/billing
+  labels:
+    team: platform
+    layer: data

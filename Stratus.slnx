@@ -1,21 +1,44 @@
 <Solution>
-  <Folder Name="/shared/">
-    <Project Path="src/shared/Contracts/Stratus.Contracts.csproj" />
-    <Project Path="src/shared/ServiceDefaults/Stratus.ServiceDefaults.csproj" />
-    <Project Path="src/shared/Messaging/Stratus.Messaging.csproj" />
+  <Folder Name="/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Stratus.BuildingBlocks.Web/Stratus.BuildingBlocks.Web.csproj" />
+    <Project Path="src/BuildingBlocks/Stratus.BuildingBlocks/Stratus.BuildingBlocks.csproj" />
+    <Project Path="src/BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
   </Folder>
-  <Folder Name="/services/">
-    <Project Path="src/services/ApiGateway/Stratus.ApiGateway.csproj" />
-    <Project Path="src/services/Identity/Stratus.Identity.csproj" />
-    <Project Path="src/services/Tenancy/Stratus.Tenancy.csproj" />
-    <Project Path="src/services/Billing/Stratus.Billing.csproj" />
-    <Project Path="src/services/Notifier/Stratus.Notifier.csproj" />
-    <Project Path="src/services/Projector/Stratus.Projector.csproj" />
+  <Folder Name="/Shared/">
+    <Project Path="src/Shared/Stratus.Contracts/Stratus.Contracts.csproj" />
+    <Project Path="src/Shared/Stratus.Messaging/Stratus.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/Services/">
+    <Project Path="src/Services/ApiGateway/Stratus.ApiGateway.Host/Stratus.ApiGateway.Host.csproj" />
+    <Project Path="src/Services/Billing/Stratus.Billing.Application/Stratus.Billing.Application.csproj" />
+    <Project Path="src/Services/Billing/Stratus.Billing.Domain/Stratus.Billing.Domain.csproj" />
+    <Project Path="src/Services/Billing/Stratus.Billing.Host/Stratus.Billing.Host.csproj" />
+    <Project Path="src/Services/Billing/Stratus.Billing.Infrastructure/Stratus.Billing.Infrastructure.csproj" />
+    <Project Path="src/Services/Billing/Stratus.Billing.Web/Stratus.Billing.Web.csproj" />
+    <Project Path="src/Services/Identity/Stratus.Identity.Application/Stratus.Identity.Application.csproj" />
+    <Project Path="src/Services/Identity/Stratus.Identity.Domain/Stratus.Identity.Domain.csproj" />
+    <Project Path="src/Services/Identity/Stratus.Identity.Host/Stratus.Identity.Host.csproj" />
+    <Project Path="src/Services/Identity/Stratus.Identity.Infrastructure/Stratus.Identity.Infrastructure.csproj" />
+    <Project Path="src/Services/Identity/Stratus.Identity.Web/Stratus.Identity.Web.csproj" />
+    <Project Path="src/Services/Notifier/Stratus.Notifier.Application/Stratus.Notifier.Application.csproj" />
+    <Project Path="src/Services/Notifier/Stratus.Notifier.Host/Stratus.Notifier.Host.csproj" />
+    <Project Path="src/Services/Notifier/Stratus.Notifier.Infrastructure/Stratus.Notifier.Infrastructure.csproj" />
+    <Project Path="src/Services/Projector/Stratus.Projector.Application/Stratus.Projector.Application.csproj" />
+    <Project Path="src/Services/Projector/Stratus.Projector.Host/Stratus.Projector.Host.csproj" />
+    <Project Path="src/Services/Projector/Stratus.Projector.Infrastructure/Stratus.Projector.Infrastructure.csproj" />
+    <Project Path="src/Services/Tenancy/Stratus.Tenancy.Application/Stratus.Tenancy.Application.csproj" />
+    <Project Path="src/Services/Tenancy/Stratus.Tenancy.Domain/Stratus.Tenancy.Domain.csproj" />
+    <Project Path="src/Services/Tenancy/Stratus.Tenancy.Host/Stratus.Tenancy.Host.csproj" />
+    <Project Path="src/Services/Tenancy/Stratus.Tenancy.Infrastructure/Stratus.Tenancy.Infrastructure.csproj" />
+    <Project Path="src/Services/Tenancy/Stratus.Tenancy.Web/Stratus.Tenancy.Web.csproj" />
   </Folder>
   <Folder Name="/tooling/">
     <Project Path="tooling/Wire/Stratus.Wire.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Stratus.Tests/Stratus.Tests.csproj" />
+    <Project Path="tests/Stratus.Architecture.Tests/Stratus.Architecture.Tests.csproj" />
+    <Project Path="tests/Stratus.Billing.Tests/Stratus.Billing.Tests.csproj" />
+    <Project Path="tests/Stratus.Identity.Tests/Stratus.Identity.Tests.csproj" />
+    <Project Path="tests/Stratus.Tenancy.Tests/Stratus.Tenancy.Tests.csproj" />
   </Folder>
 </Solution>
