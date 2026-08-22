@@ -12,7 +12,7 @@
     <!-- Messaging: native SDKs. Event Hubs is reached over its Kafka
          wire-protocol endpoint, Service Bus over AMQP 1.0. No broker
          framework — see the epic's design §C. -->
-    <PackageVersion Include="Azure.Messaging.EventHubs" Version="5.13.0" />
+    <PackageVersion Include="Azure.Messaging.EventHubs" Version="5.12.2" />
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageVersion Include="Azure.Identity" Version="1.14.0" />
     <!-- Extension abstractions: referenced by the inner layers so they can
