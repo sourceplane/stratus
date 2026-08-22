@@ -62,11 +62,20 @@ jobs:
             plan_args+=(--changed)
           fi
           orun plan "${plan_args[@]}"
-
-          echo "planned $(jq '.jobs | length' plan.json) job(s)"
       - id: matrix
         run: |
-          echo "job-matrix=$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
+          # `echo "x=$(jq ...)"` returns ECHO's exit code, so a failed jq — or a
+          # plan.json that was never written — reported success and produced an
+          # empty matrix. Assert the file exists and let jq's failure be the
+          # step's failure.
+          set -euo pipefail
+          test -f plan.json || {
+            echo "plan wrote no plan.json — did any trigger binding match this event?" >&2
+            exit 1
+          }
+          matrix="$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)"
+          echo "planned $(jq '.jobs | length' plan.json) job(s)"
+          echo "job-matrix=${matrix}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: orun-plan

@@ -56,6 +56,12 @@ automation:
         event: push
         branches: [main]
 
+    github-manual:
+      description: Manual full-fleet convergence (workflow_dispatch)
+      on:
+        provider: github
+        event: workflow_dispatch
+
     local-development:
       description: Local planning
       on:
@@ -70,6 +76,7 @@ environments:
       triggerRefs:
         - github-pull-request
         - github-push-main
+        - github-manual
         - local-development
     parameterDefaults:
       # Shared, OPTIONAL values only. A schema-required parameter is declared on
