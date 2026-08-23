@@ -35,7 +35,11 @@ spec:
       - name: stage
         profile: verify
         profileRules:
-          - profile: deploy-coolify
+          # Azure Container Apps. The catalog still carries deploy-coolify as a
+          # sibling profile of the same job template — switching target is a
+          # profile choice, not a fork — but this baseline is the Azure one, and
+          # its registry entry declares requiredIntegrations ["azure"].
+          - profile: deploy
             when:
               triggerRef: github-push-main
   parameters:

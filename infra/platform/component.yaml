@@ -15,13 +15,18 @@ spec:
     - component: messaging-plane
   subscribe:
     environments:
-      # `verify` is fmt-only and entirely offline. The plan/apply profiles need
-      # an Azure credential, and this baseline deploys to Coolify — these roots
-      # are the data plane for the SOPHISTICATED (Azure Container Apps)
-      # baseline, kept valid and inert rather than deleted. The profileRules
-      # that select plan/apply land with the Azure connection.
       - name: stage
+        # `verify` is fmt-only and offline, so a PR from a fork still gets a
+        # signal. plan/apply need the Azure connection and are selected by
+        # trigger, which is why the default stays offline.
         profile: verify
+        profileRules:
+          - profile: plan
+            when:
+              triggerRef: github-pull-request
+          - profile: apply
+            when:
+              triggerRef: github-push-main
   parameters:
     terraformVersion: "1.9.8"
     stackName: platform
