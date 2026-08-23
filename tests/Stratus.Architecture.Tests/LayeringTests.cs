@@ -108,6 +108,48 @@ public class LayeringTests
         }
     }
 
+    /// <summary>
+    /// Stratus.Messaging is the ONLY project allowed to name a broker SDK.
+    ///
+    /// This rule is here because its absence let the leak happen. The domain
+    /// rule above already forbade Azure.Messaging — but only in Domain, so the
+    /// projector's and notifier's INFRASTRUCTURE layers each constructed an
+    /// Azure client directly and nothing objected. Publishing went through
+    /// IEventPublisher; consuming named a cloud in two service projects.
+    ///
+    /// The point is not tidiness. A baseline that has to run against a second
+    /// set of brokers can only do so if "which broker" is answered in one
+    /// place, and a rule that is not enforced is a rule that decays back to
+    /// where it started.
+    /// </summary>
+    [Fact]
+    public void Only_the_messaging_package_may_name_a_broker_sdk()
+    {
+        var brokerSdks = new[] { "Azure.Messaging", "Azure.Identity", "Confluent.Kafka", "RabbitMQ.Client" };
+
+        var assemblies = new[]
+        {
+            Domain, Application, Infrastructure, Web,
+            typeof(Tenancy.Domain.Tenant).Assembly,
+            typeof(Billing.Domain.Subscription).Assembly,
+            typeof(Stratus.Projector.Infrastructure.EventConsumer).Assembly,
+            typeof(Stratus.Notifier.Infrastructure.CommandConsumer).Assembly,
+        };
+
+        foreach (var assembly in assemblies)
+        {
+            var result = Types.InAssembly(assembly)
+                .Should()
+                .NotHaveDependencyOnAny(brokerSdks)
+                .GetResult();
+
+            Assert.True(
+                result.IsSuccessful,
+                $"{assembly.GetName().Name} names a broker SDK directly — transports belong behind "
+                + $"IEventTransport/ICommandTransport in Stratus.Messaging. Offenders: {Names(result)}");
+        }
+    }
+
     private static string Names(TestResult result) =>
         result.FailingTypeNames is null ? "none reported" : string.Join(", ", result.FailingTypeNames);
 }
