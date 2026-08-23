@@ -7,7 +7,7 @@ using Stratus.ServiceDefaults;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults("notifier");
-builder.Services.AddNotifierInfrastructure();
+builder.Services.AddNotifierInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 app.MapDefaultEndpoints();
