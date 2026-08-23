@@ -8,6 +8,14 @@ TestResults/
 appsettings.Generated.json
 .orun/
 
+# The Coolify bootstrap's scratch files. `.coolify-pg-password` holds a
+# generated Postgres password between the provision and wiring phases; the
+# umbrella deletes both once wiring has read them, but a run that dies in
+# between leaves them behind, and an untracked secret is one `git add -A`
+# away from being a committed one.
+.coolify-apps.env
+.coolify-pg-password
+
 # Terraform's provider download cache. `terraform init` puts a ~230MB provider
 # binary in here, which GitHub rejects outright at 100MB — and it is a cache,
 # reconstructible from the lock file on any machine.

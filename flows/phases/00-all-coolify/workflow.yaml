@@ -1,0 +1,534 @@
+apiVersion: orun.dev/v1
+kind: Workflow
+metadata:
+  name: bootstrap-all-coolify
+# The UMBRELLA, Coolify target: nothing → a live, documented .NET fleet on the
+# operator's own server in ONE unattended run.
+#
+# ── How this differs from the Azure umbrella, and why ──
+#
+# The Azure one breaks a chicken-and-egg: `foundation` must apply FIRST and
+# alone, because its terraform outputs (registry name, resource group, deploy
+# identity) are PARAMETERS of everything after it, and parameters resolve when
+# the plan is compiled. There is no terraform here, but the same shape recurs
+# in a different place: Coolify assigns each application a UUID at creation,
+# and `deploy-coolify` needs that UUID as a parameter. So `provision` runs
+# first and alone, and `wiring` commits what it learned before the plan that
+# consumes it is built.
+#
+# What is genuinely absent: no subscription, no managed identity, no federated
+# credential, no state backend. The instance is the platform.
+#
+# ── RESUMABLE, by probing Coolify rather than trusting a checkpoint ──
+#
+# Every phase asks the instance whether its work is already done, because a
+# checkpoint file lives in a workdir that a lost sandbox takes with it, and
+# "is this already built" has an authoritative answer one API call away. Every
+# create is preceded by an ADOPT: a resumed run finds what the last one made
+# rather than building a second copy beside it.
+#
+#   --set from=<phase>   replay from a named phase, ignoring the checkpoint
+#   --set fresh=true     ignore every skip and run all phases again
+#
+# ── A note on the shell in here ──
+#
+# Every `python3` call is a ONE-LINER taking its arguments as argv. That is not
+# style: a multi-line `python3 -c "` inside a YAML block scalar puts its
+# continuation lines at column 0, which ends the scalar and produces a YAML
+# parse error rather than a script — and passing shell variables as argv rather
+# than interpolating them into the source means a value containing a quote
+# cannot rewrite the program.
+#
+# ── The credential ──
+#
+# COOLIFY_TOKEN is brokered by the platform from the workspace's Coolify
+# connection, TTL-bounded and ledgered per issuance; COOLIFY_URL comes from the
+# same connection as a non-secret fact (the `instance-url` template). Neither
+# is stored in this repo and neither is printed here.
+
+inputs:
+  workspace:
+    description: Orun Cloud workspace id
+    required: true
+  reponame:
+    description: Product repo name
+    required: true
+  githuborg:
+    description: GitHub org
+    default: sourceplane
+  productname:
+    description: Product display name
+    required: true
+  productdomain:
+    description: Product domain
+    required: true
+  out:
+    description: Path to the product checkout
+    default: ""
+  from:
+    description: Replay from this phase
+    default: ""
+  fresh:
+    description: Ignore every skip
+    default: "false"
+
+steps:
+  # ── 1. Preflight ───────────────────────────────────────────────────────────
+  # Surface the failures a token cannot self-heal in the first minute rather
+  # than fifteen minutes into provisioning.
+  - name: preflight
+    envInherit: &env
+      - GITHUB_TOKEN
+      - GH_TOKEN
+      - ORUN_TOKEN
+      - ORUN_TOKEN_FILE
+      - ORUN_BACKEND_URL
+      - COOLIFY_URL
+      - COOLIFY_TOKEN
+    timeout: 12m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        echo "preflight: workspace={{ inputs.workspace }} repo={{ inputs.githuborg }}/{{ inputs.reponame }}"
+
+        test -d "$out/.git" || { echo "preflight: no product checkout at $out" >&2; exit 1; }
+        test -f "$out/intent.yaml" || { echo "preflight: $out is not a stratus product (no intent.yaml)" >&2; exit 1; }
+
+        # This lane must be an instantiation with target=coolify. An Azure tree
+        # here would plan four terraform components that die at their first
+        # credential read, and the error would be about Azure rather than about
+        # having run the wrong brief.
+        if [ -d "$out/infra" ]; then
+          echo "preflight: $out still has infra/ — this is the AZURE instantiation." >&2
+          echo "preflight: re-instantiate with --set target=coolify, or run the Azure brief." >&2
+          exit 1
+        fi
+
+        test -n "${COOLIFY_URL:-}"   || { echo "preflight: COOLIFY_URL not brokered" >&2; exit 1; }
+        test -n "${COOLIFY_TOKEN:-}" || { echo "preflight: COOLIFY_TOKEN not brokered" >&2; exit 1; }
+
+        # Prove the instance answers BEFORE anything is created. /version needs
+        # only the `read` ability and is the cheapest authenticated call there
+        # is; a 401 here is a token problem, not a provisioning one.
+        code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${COOLIFY_URL}/api/v1/version" -H "Authorization: Bearer ${COOLIFY_TOKEN}" || echo 000)"
+        case "$code" in
+          200) echo "preflight: instance reachable, token verifies" ;;
+          401|403) echo "preflight: Coolify refused the token ($code) — re-issue it with read, write and deploy" >&2; exit 1 ;;
+          000) echo "preflight: could not reach the instance" >&2; exit 1 ;;
+          *) echo "preflight: unexpected $code from /api/v1/version" >&2; exit 1 ;;
+        esac
+
+  # ── 2. Provision ───────────────────────────────────────────────────────────
+  # Project, data services, applications. Alone and first, because Coolify
+  # assigns the application UUIDs that the deploy profile takes as parameters,
+  # and a parameter must exist before the plan that reads it is compiled.
+  - name: provision
+    needs: [preflight]
+    envInherit: *env
+    timeout: 25m
+    retry:
+      maxRetries: 2
+      kind: exponential
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        API="${COOLIFY_URL}/api/v1"
+        PROJECT_NAME="{{ inputs.reponame }}"
+
+        api() { # api <method> <path> [json-body]
+          local method="$1" path="$2" body="${3:-}"
+          if [ -n "$body" ]; then
+            curl -sS -X "$method" "${API}${path}" -H "Authorization: Bearer ${COOLIFY_TOKEN}" -H "Content-Type: application/json" -H "Accept: application/json" --max-time 60 -d "$body"
+          else
+            curl -sS -X "$method" "${API}${path}" -H "Authorization: Bearer ${COOLIFY_TOKEN}" -H "Accept: application/json" --max-time 60
+          fi
+        }
+
+        # Find an existing resource by name, or print nothing. The tolerance for
+        # a non-list body matters: an error payload here must read as "not
+        # found" and let the create proceed, not crash the phase.
+        FIND='import sys,json;
+        try: d=json.load(sys.stdin)
+        except Exception: d=[]
+        d = d if isinstance(d,list) else []
+        print(next((x.get("uuid","") for x in d if x.get("name")==sys.argv[1]), ""))'
+
+        UUID='import sys,json;
+        try: print(json.load(sys.stdin).get("uuid",""))
+        except Exception: print("")'
+
+        SERVER_UUID="$(api GET /servers | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["uuid"] if d else "")')"
+        test -n "$SERVER_UUID" || { echo "provision: no server on this Coolify instance" >&2; exit 1; }
+        echo "provision: server ${SERVER_UUID}"
+
+        PROJECT_UUID="$(api GET /projects | python3 -c "$FIND" "$PROJECT_NAME")"
+        if [ -z "$PROJECT_UUID" ]; then
+          PROJECT_UUID="$(api POST /projects "$(python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "description": sys.argv[2]}))' "$PROJECT_NAME" "{{ inputs.productname }}")" | python3 -c "$UUID")"
+          test -n "$PROJECT_UUID" || { echo "provision: could not create project" >&2; exit 1; }
+          echo "provision: created project ${PROJECT_UUID}"
+        else
+          echo "provision: adopting project ${PROJECT_UUID}"
+        fi
+
+        ENV_JSON="$(api GET "/projects/${PROJECT_UUID}/environments")"
+        ENV_NAME="$(printf '%s' "$ENV_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["name"] if d else "production")')"
+        ENV_UUID="$(printf '%s' "$ENV_JSON" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["uuid"] if d else "")')"
+        echo "provision: environment ${ENV_NAME}"
+
+        # The four fields every create shares, built once as JSON so a quoting
+        # slip cannot make one call differ from the others.
+        BASE="$(python3 -c 'import json,sys; print(json.dumps({"server_uuid":sys.argv[1],"project_uuid":sys.argv[2],"environment_name":sys.argv[3],"environment_uuid":sys.argv[4]}))' "$SERVER_UUID" "$PROJECT_UUID" "$ENV_NAME" "$ENV_UUID")"
+
+        merge() { # merge <extra-json> — BASE plus extra, as one object
+          python3 -c 'import json,sys; a=json.loads(sys.argv[1]); a.update(json.loads(sys.argv[2])); print(json.dumps(a))' "$BASE" "$1"
+        }
+
+        # ── Postgres ──
+        # The password is generated here and never printed. It reaches the
+        # services as a Coolify environment variable, which is the same path
+        # Coolify uses for its own linked resources.
+        PG_NAME="${PROJECT_NAME}-postgres"
+        PG_UUID="$(api GET /databases | python3 -c "$FIND" "$PG_NAME")"
+        PG_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+        if [ -z "$PG_UUID" ]; then
+          PG_UUID="$(api POST /databases/postgresql "$(merge "$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"postgres_user":"stratus","postgres_password":sys.argv[2],"postgres_db":"stratus","instant_deploy":True}))' "$PG_NAME" "$PG_PASSWORD")")" | python3 -c "$UUID")"
+          test -n "$PG_UUID" || { echo "provision: could not create postgres" >&2; exit 1; }
+          echo "provision: created postgres ${PG_UUID}"
+          printf '%s' "$PG_PASSWORD" > "$out/.coolify-pg-password"
+        else
+          echo "provision: adopting postgres ${PG_UUID}"
+          # A resumed run cannot re-read the password Coolify stored, so the
+          # applications keep the one they were already given. Rotating it here
+          # would break every service that is already running.
+          if [ -f "$out/.coolify-pg-password" ]; then
+            PG_PASSWORD="$(cat "$out/.coolify-pg-password")"
+          else
+            echo "provision: postgres exists but its password is not recorded here." >&2
+            echo "provision: the applications keep their existing ConnectionStrings__Postgres." >&2
+            PG_PASSWORD=""
+          fi
+        fi
+
+        # ── Kafka and RabbitMQ, as compose services ──
+        # `docker_compose_raw` rather than Coolify's one-click `type` enum: the
+        # catalog's names vary between Coolify versions, and a bootstrap that
+        # breaks when the operator upgrades their instance is worse than one
+        # carrying its own two compose files.
+        make_service() { # make_service <name> <compose-file>
+          local name="$1" file="$2" uuid
+          uuid="$(api GET /services | python3 -c "$FIND" "$name")"
+          if [ -n "$uuid" ]; then echo "$uuid"; return 0; fi
+          api POST /services "$(merge "$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"instant_deploy":True,"docker_compose_raw":open(sys.argv[2]).read()}))' "$name" "$file")")" | python3 -c "$UUID"
+        }
+
+        cat > /tmp/kafka.yml <<'KAFKA'
+        services:
+          kafka:
+            image: bitnami/kafka:3.9
+            environment:
+              KAFKA_CFG_NODE_ID: "0"
+              KAFKA_CFG_PROCESS_ROLES: controller,broker
+              KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+              KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+              KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+              KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+              KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+            volumes:
+              - kafka_data:/bitnami/kafka
+        volumes:
+          kafka_data:
+        KAFKA
+
+        cat > /tmp/rabbit.yml <<'RABBIT'
+        services:
+          rabbitmq:
+            image: rabbitmq:4-management
+            volumes:
+              - rabbit_data:/var/lib/rabbitmq
+        volumes:
+          rabbit_data:
+        RABBIT
+
+        KAFKA_UUID="$(make_service "${PROJECT_NAME}-kafka" /tmp/kafka.yml)"
+        RABBIT_UUID="$(make_service "${PROJECT_NAME}-rabbitmq" /tmp/rabbit.yml)"
+        echo "provision: kafka ${KAFKA_UUID:-<none>} rabbitmq ${RABBIT_UUID:-<none>}"
+
+        # ── The six applications ──
+        # Created BEFORE any image exists, deliberately: the UUID is what the
+        # deploy profile needs, the image arrives when converge pushes it, and
+        # Coolify pulls on deploy.
+        : > "$out/.coolify-apps.env"
+        for svc in api-gateway identity tenancy billing notifier projector; do
+          app_name="${PROJECT_NAME}-${svc}"
+          uuid="$(api GET /applications | python3 -c "$FIND" "$app_name")"
+
+          if [ -z "$uuid" ]; then
+            image="ghcr.io/{{ inputs.githuborg }}/stratus/${svc}"
+            if [ "$svc" = "api-gateway" ]; then
+              extra="$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"docker_registry_image_name":sys.argv[2],"docker_registry_image_tag":"latest","ports_exposes":"8080","health_check_enabled":True,"health_check_path":"/health"}))' "$app_name" "$image")"
+            else
+              extra="$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"docker_registry_image_name":sys.argv[2],"docker_registry_image_tag":"latest","ports_exposes":"8080"}))' "$app_name" "$image")"
+            fi
+            uuid="$(api POST /applications/dockerimage "$(merge "$extra")" | python3 -c "$UUID")"
+            echo "provision: created ${app_name} ${uuid}"
+          else
+            echo "provision: adopting ${app_name} ${uuid}"
+          fi
+          test -n "$uuid" || { echo "provision: no uuid for ${app_name}" >&2; exit 1; }
+          printf '%s=%s\n' "$(printf '%s' "$svc" | tr 'a-z-' 'A-Z_')_UUID" "$uuid" >> "$out/.coolify-apps.env"
+
+          # ── Wiring, as environment variables ──
+          # This is how Coolify supplies connection details, and why the
+          # instantiation stripped the @@wiring(...)@@ tokens: ASP.NET Core's
+          # environment provider overlays these onto appsettings with no code.
+          set_env() {
+            api POST "/applications/${uuid}/envs" "$(python3 -c 'import json,sys; print(json.dumps({"key":sys.argv[1],"value":sys.argv[2],"is_preview":False}))' "$1" "$2")" >/dev/null 2>&1 || true
+          }
+          set_env "Messaging__Provider" "oss"
+          set_env "Messaging__KafkaBootstrapServers" "kafka:9092"
+          set_env "Messaging__RabbitMqUri" "amqp://guest:guest@rabbitmq:5672/"
+          set_env "Messaging__CommandQueueName" "notifier.commands"
+          set_env "Messaging__ConsumerGroup" "$svc"
+          set_env "ASPNETCORE_URLS" "http://+:8080"
+          if [ -n "$PG_PASSWORD" ]; then
+            set_env "ConnectionStrings__Postgres" "Host=${PG_NAME};Database=stratus;Username=stratus;Password=${PG_PASSWORD}"
+          fi
+        done
+
+        echo "provision: complete — 1 project, 3 data services, 6 applications"
+
+  # ── 3. Wiring ──────────────────────────────────────────────────────────────
+  # Commit what provisioning learned, because the plan compiled next resolves
+  # these as parameters.
+  - name: wiring
+    needs: [provision]
+    envInherit: *env
+    timeout: 10m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+        test -f .coolify-apps.env || { echo "wiring: provision did not record the app uuids" >&2; exit 1; }
+        # shellcheck disable=SC1091
+        . ./.coolify-apps.env
+
+        bind() { # bind <service-dir> <uuid>
+          test -n "$2" || return 0
+          python3 -c 'import re,sys,pathlib; p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(re.sub(r"(?m)^(\s*coolifyAppUuid:\s*).*$", lambda m: m.group(1)+chr(34)+sys.argv[2]+chr(34), t))' "src/Services/$1/component.yaml" "$2"
+        }
+        bind ApiGateway "${API_GATEWAY_UUID:-}"
+        bind Identity   "${IDENTITY_UUID:-}"
+        bind Tenancy    "${TENANCY_UUID:-}"
+        bind Billing    "${BILLING_UUID:-}"
+        bind Notifier   "${NOTIFIER_UUID:-}"
+        bind Projector  "${PROJECTOR_UUID:-}"
+
+        python3 -c 'import re,sys,pathlib; p=pathlib.Path("intent.yaml"); t=p.read_text(); p.write_text(re.sub(r"(?m)^(\s*coolifyUrl:\s*).*$", lambda m: m.group(1)+chr(34)+sys.argv[1]+chr(34), t))' "$COOLIFY_URL"
+
+        rm -f .coolify-apps.env .coolify-pg-password
+        if git diff --quiet; then
+          echo "wiring: already bound, nothing to commit"
+        else
+          git add intent.yaml src/Services/*/component.yaml
+          git -c user.email=bootstrap@sourceplane.io -c user.name="orun bootstrap" commit -q -m "chore(wiring): bind the Coolify instance and application uuids
+
+        None of these is a secret. The deploy credential is brokered per run
+        from the workspace's Coolify connection, so there is nothing to rotate."
+          git push origin HEAD
+          echo "wiring: committed"
+        fi
+
+  # ── 4. Converge ────────────────────────────────────────────────────────────
+  # One plan, one run. The dependsOn edges already encode the order.
+  - name: converge
+    needs: [wiring]
+    envInherit: *env
+    timeout: 45m
+    retry:
+      maxRetries: 2
+      kind: exponential
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+        orun plan --trigger github-push-main --output plan.json
+
+        # A parameter with no value renders as the literal "<no value>" and the
+        # step it lands in fails with no explanation. Catch it in the plan,
+        # where the name of the offending parameter is still visible.
+        if python3 -c 'import json,sys; sys.exit(0 if "<no value>" in json.dumps(json.load(open("plan.json"))) else 1)'; then
+          echo 'converge: the plan contains "<no value>" — a parameter was never given a value' >&2
+          exit 1
+        fi
+
+        orun run --plan plan.json
+
+  # ── 5. Verify ──────────────────────────────────────────────────────────────
+  - name: verify
+    needs: [converge]
+    envInherit: *env
+    timeout: 15m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+
+        # A SEALED-STATE assertion, not a grep of the summary line: every job in
+        # the plan must have reached `completed`. The failure this exists for is
+        # a run that exits 0 having scheduled nothing — which is what a
+        # summary-line grep reports as success.
+        orun status --json > status.json
+        python3 -c 'import json,sys
+        acc=[]
+        def walk(o):
+            if isinstance(o,dict):
+                if "id" in o and "state" in o: acc.append((o["id"],o["state"]))
+                for v in o.values(): walk(v)
+            elif isinstance(o,list):
+                for v in o: walk(v)
+        walk(json.load(open("status.json")))
+        if not acc:
+            print("verify: no job envelope in orun status — cannot confirm anything", file=sys.stderr); sys.exit(1)
+        bad=[(i,s) for i,s in acc if s!="completed"]
+        for i,s in bad: print(f"verify: {i} is {s}", file=sys.stderr)
+        if not bad: print(f"verify: all {len(acc)} jobs completed")
+        sys.exit(1 if bad else 0)'
+
+        # ── The gateway, from outside ──
+        # Every job reporting `completed` means orun scheduled and ran what it
+        # was asked to. It does not mean the fleet answers. The five other
+        # services are internal to the Coolify network; the gateway is the one
+        # surface reachable from here, so it is the one thing probed.
+        test -f .coolify-apps.env && . ./.coolify-apps.env || true
+        GW="${API_GATEWAY_UUID:-}"
+        if [ -z "$GW" ]; then
+          GW="$(python3 -c 'import re,sys,pathlib; t=pathlib.Path("src/Services/ApiGateway/component.yaml").read_text(); m=re.search(r"(?m)^\s*coolifyAppUuid:\s*\"?([^\"\s]+)", t); print(m.group(1) if m else "")')"
+        fi
+        test -n "$GW" || { echo "verify: no gateway uuid to probe" >&2; exit 1; }
+
+        FQDN="$(curl -sS --max-time 30 "${COOLIFY_URL}/api/v1/applications/${GW}" -H "Authorization: Bearer ${COOLIFY_TOKEN}" -H 'Accept: application/json' | python3 -c 'import sys,json
+        try: d=json.load(sys.stdin)
+        except Exception: d={}
+        f=(d.get("fqdn") or "").split(",")[0].strip()
+        print(f)')"
+
+        if [ -z "$FQDN" ]; then
+          echo "verify: the gateway has no domain assigned in Coolify, so it has no"
+          echo "verify: address to probe from outside. Assign one in Coolify and"
+          echo "verify: re-run --set from=verify. The fleet itself converged."
+          exit 0
+        fi
+
+        case "$FQDN" in http://*|https://*) URL="$FQDN" ;; *) URL="https://$FQDN" ;; esac
+        echo "verify: probing ${URL}/health"
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/health" || echo 000)"
+          if [ "$code" = "200" ]; then
+            echo "verify: gateway answers 200 at ${URL}/health"
+            exit 0
+          fi
+          echo "verify: attempt ${attempt}/10 got ${code}; a just-deployed container needs a moment"
+          sleep 15
+        done
+        echo "verify: gateway never answered 200 at ${URL}/health (last ${code})" >&2
+        echo "verify: check the container's logs in Coolify — a service that starts" >&2
+        echo "verify: and is killed is this instance running out of memory." >&2
+        exit 1
+
+  # ── 6. Docs ────────────────────────────────────────────────────────────────
+  - name: docs
+    needs: [verify]
+    envInherit: *env
+    timeout: 10m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+        mkdir -p docs
+
+        cat > docs/deployment.md <<'DEPLOY'
+        # Deployment
+
+        This product runs on a Coolify instance. There is no terraform and no
+        cloud subscription: the instance is the platform.
+
+        | what | where |
+        |---|---|
+        | six services | Coolify applications, images from GHCR |
+        | Postgres | a Coolify PostgreSQL resource |
+        | Kafka | a Coolify compose service — the event log |
+        | RabbitMQ | a Coolify compose service — the command queue |
+
+        ## Credentials
+
+        The deploy lane holds none. Each run brokers a TTL-bounded token from
+        the workspace's Coolify connection, ledgered per issuance. The values in
+        `intent.yaml` — the instance URL and six application UUIDs — are
+        identifiers, not secrets, and nothing here needs rotating.
+
+        Service connection details live as Coolify environment variables on each
+        application, which is how Coolify supplies linked resources; ASP.NET
+        Core's environment provider overlays them onto appsettings with no code
+        involved. That is why the config templates carry no wiring tokens.
+        DEPLOY
+
+        cat > docs/operations.md <<'OPS'
+        # Operations
+
+        ## Deploying
+
+        Merging to `main` converges the fleet: each service is built, pushed to
+        GHCR, and Coolify is asked to redeploy it.
+
+        ## Messaging
+
+        `Messaging:Provider=oss` selects Kafka and RabbitMQ. An unrecognised
+        value throws at startup rather than falling back — a fleet pointed at
+        brokers holding no traffic would otherwise look healthy and consume
+        nothing.
+
+        Failed commands are dead-lettered to `<queue>.dlx` carrying the
+        handler's reason in the `x-stratus-reason` header. That is the queue to
+        read when something has gone wrong.
+
+        One difference from the Azure lane worth knowing: AMQP 0-9-1 has no
+        sessions, so per-tenant command ordering is the outbox's job here rather
+        than the broker's.
+
+        ## Capacity
+
+        Six .NET services plus three data services on one server is a real
+        constraint. If containers are being killed, the honest fix is a bigger
+        server, not a smaller fleet.
+        OPS
+
+        # Stage FIRST, then ask whether anything is staged. `git diff --quiet`
+        # alone reports "no change" for a brand-new file, which on a first run
+        # is every file here — the docs would be written and never committed,
+        # and the phase would say "unchanged" and exit 0.
+        git add docs
+        if git diff --cached --quiet; then
+          echo "docs: unchanged"
+        else
+          git -c user.email=bootstrap@sourceplane.io -c user.name="orun bootstrap" commit -q -m "docs: what was deployed, and how to operate it"
+          git push origin HEAD
+          echo "docs: written"
+        fi
