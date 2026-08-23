@@ -30,24 +30,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The two paths the blueprint registry points at. A bootstrap whose brief
-      # 404s fails after the workspace has been charged and a sandbox started,
-      # so the tag refuses to exist rather than the bootstrap failing later.
+      # Every path the blueprint registry points at, for BOTH entries that
+      # resolve to this repo. A bootstrap whose brief 404s fails after the
+      # workspace has been charged and a sandbox started, so the tag refuses to
+      # exist rather than the bootstrap failing later.
+      #
+      # This list was the Azure two for one release, while `stratus-coolify`
+      # was being registered against the same tag — so the guard that exists to
+      # catch exactly this passed over a tag containing neither Coolify file.
+      # When a registry entry is added, its paths are added here.
       - name: Assert the registry's paths resolve
         run: |
           set -euo pipefail
-          for path in flows/agent/BASELINE-TASK.md flows/phases/00-all/workflow.yaml; do
+          paths=(
+            flows/agent/BASELINE-TASK.md                 # stratus
+            flows/phases/00-all/workflow.yaml            # stratus
+            flows/agent/BASELINE-TASK-COOLIFY.md         # stratus-coolify
+            flows/phases/00-all-coolify/workflow.yaml    # stratus-coolify
+          )
+          for path in "${paths[@]}"; do
             test -f "$path" || { echo "release: $path is missing — the registry points at it" >&2; exit 1; }
           done
-          echo "release: both registry paths present"
+          echo "release: all ${#paths[@]} registry paths present"
 
       - name: Setup Orun
         uses: sourceplane/orun-action@v1.2.0
         with:
           version: v2.53.2
 
-      - name: Validate the umbrella
-        run: orun workflow validate flows/phases/00-all/workflow.yaml
+      # Both umbrellas, because both are fetched at this tag. `orun workflow
+      # validate` is the only check that reads the real Step schema: a YAML
+      # parse and `bash -n` together passed an umbrella whose steps carried an
+      # invented field and no `needs` at all.
+      - name: Validate the umbrellas
+        run: |
+          set -euo pipefail
+          orun workflow validate flows/phases/00-all/workflow.yaml
+          orun workflow validate flows/phases/00-all-coolify/workflow.yaml
 
       - name: Validate the intent
         run: orun validate

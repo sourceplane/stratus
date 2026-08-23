@@ -19,7 +19,7 @@ compositions:
     # without a commit here. Bumping the tag is the deliberate upgrade step.
     - name: stack-basalt
       kind: oci
-      ref: oci://ghcr.io/sourceplane/stack-basalt:0.2.1
+      ref: oci://ghcr.io/sourceplane/stack-basalt:0.2.2
   resolution:
     precedence:
       - stack-basalt

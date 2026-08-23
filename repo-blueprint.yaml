@@ -43,6 +43,24 @@ inputs:
     type: string
     required: true
     description: Product domain (e.g. acme.dev) — docs and mail, no zone needed yet.
+  target:
+    type: string
+    pattern: "^(azure|coolify)$"
+    required: false
+    default: azure
+    description: >-
+      Where this product deploys. `azure` is the tree as authored — Container
+      Apps, Event Hubs, Service Bus, and terraform for the whole estate.
+      `coolify` deletes the Azure terraform components, switches every service
+      to the deploy-coolify profile, and points messaging at self-hosted Kafka
+      and RabbitMQ.
+
+      This is chosen HERE, at instantiation, rather than being a profile
+      selected per deployment — orun's `profileRules[].when` accepts only
+      `triggerRef`, so "same trigger, different target" has no grammar, and a
+      repo carrying both lanes would run both in CI with one of them never
+      exercised against real infrastructure. A product deploys to one place,
+      and that is known now.
 
 # ── SOURCES ───────────────────────────────────────────────────────────────
 # The baseline is this repo. Run `orun new` from the Stratus root so `path: .`
@@ -110,7 +128,8 @@ modules:
           "pascalName": "{{ .pascalName }}",
           "repoName": "{{ .repoName }}",
           "productName": "{{ .productName }}",
-          "productDomain": "{{ .productDomain }}"
+          "productDomain": "{{ .productDomain }}",
+          "target": "{{ .target }}"
         }
 
 # ── HOOKS ─────────────────────────────────────────────────────────────────

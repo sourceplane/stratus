@@ -36,6 +36,7 @@ var dryRun = args_.Contains("--dry-run");
 // templated by `orun new` — `{{ inputs.pascalName }}` arrives as those literal
 // characters — so the rendered values file is the channel. The explicit flags
 // stay for running this by hand.
+var target = Get("--target");
 var valuesPath = Get("--values");
 if (valuesPath is not null)
 {
@@ -49,6 +50,7 @@ if (valuesPath is not null)
         doc.RootElement.TryGetProperty(key, out var v) ? v.GetString() : null;
     pascal ??= FromValues("pascalName");
     slug ??= FromValues("repoName");
+    target ??= FromValues("target");
 }
 
 if (pascal is null || slug is null)
@@ -175,19 +177,33 @@ foreach (var path in paths)
 {
     var dir = Path.GetDirectoryName(path)!;
     var name = Path.GetFileName(path).Replace("Stratus", pascal, StringComparison.Ordinal);
-    var target = Path.Combine(dir, name);
-    if (string.Equals(path, target, StringComparison.Ordinal)) continue;
+    var renamedPath = Path.Combine(dir, name);
+    if (string.Equals(path, renamedPath, StringComparison.Ordinal)) continue;
 
     renamed++;
     if (dryRun) continue;
 
-    if (Directory.Exists(path)) Directory.Move(path, target);
-    else if (File.Exists(path)) File.Move(path, target);
+    if (Directory.Exists(path)) Directory.Move(path, renamedPath);
+    else if (File.Exists(path)) File.Move(path, renamedPath);
 }
 
 Console.WriteLine(
     $"rebrand: {(dryRun ? "would rewrite" : "rewrote")} {changedFiles} file(s), "
     + $"{(dryRun ? "would rename" : "renamed")} {renamed} path(s) — Stratus → {pascal}, stratus → {slug}");
+
+// The deploy target, applied after the rename so the files it edits already
+// carry the product's own identity. Defaults to azure, which is the tree as
+// authored — see Rebrand.Target for why this is an instantiation-time choice
+// rather than a runtime profile.
+target ??= Rebrand.Target.Azure;
+if (!Rebrand.Target.Supported.Contains(target, StringComparer.OrdinalIgnoreCase))
+{
+    Console.Error.WriteLine(
+        $"rebrand: --target '{target}' is not supported. Choose one of: {string.Join(", ", Rebrand.Target.Supported)}");
+    return 1;
+}
+
+Rebrand.Target.Apply(rootFull, target, dryRun, Console.Out);
 
 // A rebrand that renamed nothing is a rebrand that ran against the wrong tree,
 // and reporting success there is how a fork gets shipped with the baseline's
