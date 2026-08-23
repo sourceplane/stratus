@@ -96,6 +96,28 @@ public static class Target
                 @"(?m)^(\s*-\s*profile:\s*)deploy(\s*)$",
                 "$1deploy-coolify$2");
 
+            // The comment ABOVE that line explains the Azure choice and ends
+            // with "this baseline is the Azure one". Left alone it survives
+            // into the Coolify tree as a confident statement of the opposite
+            // of what the file now does — and a generated repo's comments are
+            // read as fact, because nobody expects them to be stale. Rewritten
+            // as a block so the replacement is one coherent paragraph rather
+            // than four independently-patched lines.
+            updated = Regex.Replace(
+                updated,
+                @"(?m)^(?<indent>\s*)# Azure Container Apps\. The catalog still carries deploy-coolify as a\r?\n"
+                    + @"\s*# sibling profile of the same job template — switching target is a\r?\n"
+                    + @"\s*# profile choice, not a fork — but this baseline is the Azure one, and\r?\n"
+                    + @"\s*# its registry entry declares requiredIntegrations \[""azure""\]\.\r?\n",
+                m =>
+                {
+                    var i = m.Groups["indent"].Value;
+                    return $"{i}# Coolify. The catalog carries deploy and deploy-coolify as sibling\n"
+                        + $"{i}# profiles of the SAME job template — switching target is a profile\n"
+                        + $"{i}# choice, not a fork — and this tree was instantiated for Coolify,\n"
+                        + $"{i}# whose registry entry declares requiredIntegrations [\"coolify\"].\n";
+                });
+
             if (string.Equals(original, updated, StringComparison.Ordinal)) continue;
 
             switched++;
