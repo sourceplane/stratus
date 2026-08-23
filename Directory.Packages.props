@@ -20,6 +20,13 @@
     <PackageVersion Include="Azure.Messaging.EventHubs" Version="5.12.2" />
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageVersion Include="Azure.Identity" Version="1.14.0" />
+    <!-- ...and the same two roles on self-hosted brokers. Kafka speaks the
+         protocol Event Hubs exposes and RabbitMQ speaks the one Service Bus
+         does, so this is a second implementation of IEventTransport /
+         ICommandTransport rather than a second messaging model. Which pair a
+         deployment uses is `Messaging:Provider`, read at startup. -->
+    <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
     <!-- Extension abstractions: referenced by the inner layers so they can
          declare ports (ILogger, IServiceCollection) without dragging in an
          implementation. -->
@@ -27,6 +34,10 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <!-- Concrete implementations, for tests that build a real container to
+         check which transports a configuration resolves to. -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
 
     <!-- Gateway -->
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />

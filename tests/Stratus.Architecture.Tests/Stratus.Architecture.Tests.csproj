@@ -19,11 +19,14 @@
          that could not load them would pass while proving nothing. -->
     <ProjectReference Include="../../src/Services/Projector/Stratus.Projector.Infrastructure/Stratus.Projector.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Services/Notifier/Stratus.Notifier.Infrastructure/Stratus.Notifier.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/Shared/Stratus.Messaging/Stratus.Messaging.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 </Project>
