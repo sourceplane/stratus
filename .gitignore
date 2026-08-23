@@ -7,3 +7,11 @@ TestResults/
 # Rendered from appsettings.template.json at deploy time — never committed.
 appsettings.Generated.json
 .orun/
+
+# Terraform's provider download cache. `terraform init` puts a ~230MB provider
+# binary in here, which GitHub rejects outright at 100MB — and it is a cache,
+# reconstructible from the lock file on any machine.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
