@@ -1,0 +1,69 @@
+name: Baseline release
+
+# Cuts the pinned ref the platform's blueprint bootstrap fetches.
+#
+# This exists as a workflow rather than as `git tag && git push` because some
+# clients cannot push to refs/tags — a proxied credential may allow branch
+# pushes and refuse tag pushes with a bare 403. `gh release create` makes the
+# tag SERVER-SIDE from the commit it targets, which needs no tag-push right at
+# all.
+#
+# The registry pins a TAG, never a branch, and the platform's own test enforces
+# /^baseline-v\d+$/. That is the point: a workspace that has already started a
+# bootstrap must not have the baseline change underneath it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Baseline version to cut (the vN in baseline-vN).
+        required: true
+        default: "1"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Cut baseline-v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The two paths the blueprint registry points at. A bootstrap whose brief
+      # 404s fails after the workspace has been charged and a sandbox started,
+      # so the tag refuses to exist rather than the bootstrap failing later.
+      - name: Assert the registry's paths resolve
+        run: |
+          set -euo pipefail
+          for path in flows/agent/BASELINE-TASK.md flows/phases/00-all/workflow.yaml; do
+            test -f "$path" || { echo "release: $path is missing — the registry points at it" >&2; exit 1; }
+          done
+          echo "release: both registry paths present"
+
+      - name: Setup Orun
+        uses: sourceplane/orun-action@v1.2.0
+        with:
+          version: v2.53.2
+
+      - name: Validate the umbrella
+        run: orun workflow validate flows/phases/00-all/workflow.yaml
+
+      - name: Validate the intent
+        run: orun validate
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: baseline-v${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "release: ${TAG} already exists — nothing to do."
+            exit 0
+          fi
+          gh release create "${TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "${TAG}" \
+            --generate-notes
+          echo "release: cut ${TAG} at ${GITHUB_SHA}"
