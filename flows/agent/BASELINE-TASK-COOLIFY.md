@@ -101,7 +101,16 @@ error. The ones no token can self-heal, and what they look like:
   failure is a 401 or 403 on one specific call. The bootstrap needs `write`
   (to create the project, resources and applications) and `deploy` (to deploy
   them). Report which call was refused; an operator re-issues the token with
-  the missing ability.
+  the missing ability. Note that Coolify has no token-derivation endpoint, so
+  the platform serves the connection's own token: a token missing `deploy`
+  fails at the deploy step no matter which scope template is bound.
+- **The repo is not allow-listed for the workspace, or the platform credential
+  is below admin.** Both surface in `wiring`, not later, and both are operator
+  actions rather than anything a retry fixes. The first is a Git Repos grant in
+  the console. The second is subtler: writing a brokered secret requires the
+  ADMIN role, and resource-hiding masks the denial as `not_found` — so if the
+  listings in that phase succeeded and only the write 404s, the role is the
+  cause, not a missing resource. `wiring` says exactly this when it happens.
 - **A port or domain is already taken on that server.** Coolify will say so.
   Report it rather than picking another name — a collision usually means a
   previous run of this bootstrap is still there, and the resumable path should

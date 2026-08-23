@@ -6,10 +6,32 @@ metadata:
   description: .NET multi-tenant SaaS baseline on Azure Container Apps
   namespace: sourceplane
 
-# No `execution.state` block yet: this repo is not bound to an Orun Cloud
-# workspace, and declaring one with an empty id plus requireOrg would fail fast
-# on every non-interactive run. State stays local until the workspace exists,
-# at which point this block and CI's --remote-state flag land together.
+# Remote state, declared but INERT until the bootstrap binds this repo.
+#
+# `mode` is the switch — orun reads `execution.state.mode == "remote"`, not the
+# presence of a backendUrl — so shipping this block empty leaves `orun new`,
+# `orun validate` and local development exactly as they were: local state, no
+# platform credential, no network. The bootstrap's wiring phase fills `mode`
+# and `workspace` together, and from that commit on every lane (the sandbox's
+# own converge and the product's CI alike) resolves through the platform.
+#
+# It has to land, not stay a TODO. A deploy lane reads its provider credential
+# from a `secret://` reference, and that reference is only resolvable against
+# remote state: with state local, orun wires the ORUN_SECRET_<KEY> resolver
+# instead, the key is absent, and `deploy-coolify` fails its own non-empty
+# assertion. Three files used to carry a comment saying "no workspace binding
+# yet" — this is that binding.
+execution:
+  state:
+    backendUrl: https://api-edge-prod.oruncloud.workers.dev
+    # Both filled by `flows/phases/*/workflow.yaml` at wiring time. Empty here
+    # is not a placeholder to remember — it is what keeps this block inert.
+    mode: ""
+    workspace: ""
+    # The workspace claim travels on every remote op, including CI's
+    # credential-free OIDC exchange, so the platform can enforce
+    # claim ⊆ authorized rather than trusting the repo.
+    requireOrg: true
 
 compositions:
   sources:
