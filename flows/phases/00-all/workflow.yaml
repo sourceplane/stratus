@@ -1,0 +1,316 @@
+apiVersion: orun.dev/v1
+kind: Workflow
+metadata:
+  name: bootstrap-all
+# The UMBRELLA: nothing → a live, documented .NET fleet on Azure in ONE
+# unattended run.
+#
+# ── Why this is SHORTER than the Cloudflare baselines' umbrella ──
+#
+# It is not less thorough; the sequencing lives somewhere better. The whole
+# fleet is one orun plan whose dependsOn edges already encode the order —
+# foundation before the data and messaging planes, those before the platform,
+# the platform before any service, each service before its migrations. So this
+# workflow does NOT enumerate a phase per layer and hand-order them. It does
+# the two things the plan genuinely cannot do for itself:
+#
+#   1. Apply `foundation` FIRST and on its own, because its outputs (the
+#      registry name, the resource group, the deploy identity's client id) are
+#      PARAMETERS of the components that follow. A parameter is resolved when
+#      the plan is compiled, so it must be committed before the plan that uses
+#      it is built. That is the bootstrap chicken-and-egg, and this is where it
+#      is broken.
+#   2. Converge everything else in one `orun run`, in dependency order.
+#
+# There is also no cycle-break step. Container Apps resolves service-to-service
+# calls by internal DNS at runtime, so six mutually-referencing services deploy
+# in any order — the two-pass machinery the Cloudflare baselines need is simply
+# absent here.
+#
+# ── RESUMABLE ──
+#
+# A failed run is resumed by running it again. Every phase probes REALITY for
+# its postcondition (does the resource group exist, is the wiring committed,
+# does the gateway answer) rather than trusting a checkpoint file, because a
+# lost workdir takes a checkpoint with it and the cloud is the durable record.
+#
+#   --set from=<step>    replay from a named step, ignoring what already holds
+#   --set fresh=true     ignore every skip and run everything again
+inputs:
+  workspace:
+    type: string
+    required: true
+    description: Workspace id (ws_…) or slug this product deploys against.
+  reponame:
+    type: string
+    required: true
+    description: Repo slug (lowercase; becomes <githuborg>/<reponame>).
+  productname:
+    type: string
+    required: true
+    description: Human product display name.
+  productdomain:
+    type: string
+    required: true
+    description: Product domain (e.g. acme.dev).
+  location:
+    type: string
+    default: "westeurope"
+    description: >
+      Azure region every resource lands in. Capacity is regional: a
+      subscription that cannot create a Postgres Flexible Server SKU here will
+      fail in `foundation`, and the fix is a different region, never a quieter
+      SKU.
+  githuborg:
+    type: string
+    default: "sourceplane"
+    description: GitHub org the repo lives under.
+  out:
+    type: string
+    default: ""
+    description: Product path. Empty = ./product.
+  baselineref:
+    type: string
+    default: ""
+    description: Baseline ref. Empty = the commit this flow was fetched from.
+  from:
+    type: string
+    default: ""
+    description: 'Resume point: skip every step before this one.'
+  fresh:
+    type: string
+    default: "false"
+    description: '"true" ignores every skip and runs everything again.'
+
+steps:
+  # ── 1. Preflight ───────────────────────────────────────────────────────────
+  # The expensive failures are the ones a token cannot self-heal, so they are
+  # surfaced in the first minute rather than twenty minutes into a terraform
+  # apply: no Azure connection, no repo, no subscription permission.
+  - name: preflight
+    envInherit: &env
+      - GITHUB_TOKEN
+      - GH_TOKEN
+      - ORUN_TOKEN
+      - ORUN_TOKEN_FILE
+      - ORUN_BACKEND_URL
+      - AZURE_SUBSCRIPTION_ID
+      - AZURE_TENANT_ID
+      - AZURE_CLIENT_ID
+    timeout: 12m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        echo "preflight: workspace={{ inputs.workspace }} repo={{ inputs.githuborg }}/{{ inputs.reponame }}"
+
+        test -d "$out/.git" || { echo "preflight: no product checkout at $out" >&2; exit 1; }
+        test -f "$out/intent.yaml" || { echo "preflight: $out is not a stratus product (no intent.yaml)" >&2; exit 1; }
+
+        # The Azure connection is the ONE prerequisite no token can self-heal.
+        # Poll rather than fail: a consent can be clicked while this waits.
+        for attempt in $(seq 1 20); do
+          if orun integrations list --workspace "{{ inputs.workspace }}" 2>/dev/null | grep -qi '^azure\|[[:space:]]azure[[:space:]]'; then
+            echo "preflight: azure connection present"
+            exit 0
+          fi
+          echo "preflight: waiting for an Azure connection on {{ inputs.workspace }} (attempt ${attempt}/20)"
+          sleep 30
+        done
+        echo "preflight: no Azure connection on workspace {{ inputs.workspace }}." >&2
+        echo "preflight: connect one in the console (Integrations → Azure), then re-run this umbrella." >&2
+        exit 1
+
+  # ── 2. Foundation ──────────────────────────────────────────────────────────
+  # Alone, and first, because everything after it consumes its outputs as
+  # PARAMETERS — which are resolved at plan-compile time, so they must be
+  # committed before the plan that uses them exists.
+  - name: foundation
+    needs: [preflight]
+    envInherit: *env
+    timeout: 25m
+    retry:
+      maxRetries: 2
+      kind: exponential
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+
+        # Reality probe, not a checkpoint: if the registry name is already
+        # committed the apply has happened, and re-running it costs 10 minutes
+        # to reach the same state.
+        if [ "{{ inputs.fresh }}" != "true" ] && grep -qE '^\s+acrName: "[a-z0-9]+"' intent.yaml; then
+          echo "foundation: wiring already committed — skipping"
+          exit 0
+        fi
+
+        orun run foundation --env stage --remote-state --workspace "{{ inputs.workspace }}"
+
+  # ── 3. Wiring ──────────────────────────────────────────────────────────────
+  # Read foundation's outputs and commit them as component parameters. THIS is
+  # the step that turns a generic baseline into this product's repo, and it is
+  # the reason foundation cannot simply be another node in the big plan.
+  #
+  # Only IDENTIFIERS are written: a registry name, a resource group, a client
+  # id, a tenant id, a subscription id. None is a secret, none needs rotating,
+  # and that is a property of the federated-identity design rather than an
+  # accident — after this, CI holds no Azure credential at all.
+  - name: wiring
+    needs: [foundation]
+    envInherit: *env
+    timeout: 10m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+
+        if [ "{{ inputs.fresh }}" != "true" ] && grep -qE '^\s+acrName: "[a-z0-9]+"' intent.yaml; then
+          echo "wiring: already committed — skipping"
+          exit 0
+        fi
+
+        tf=infra/foundation/terraform
+        acr="$(terraform -chdir="$tf" output -raw acr_name)"
+        rg="$(terraform -chdir="$tf" output -raw resource_group)"
+        client="$(terraform -chdir="$tf" output -raw deploy_identity_client_id)"
+        for v in "$acr" "$rg" "$client"; do
+          test -n "$v" || { echo "wiring: foundation produced an empty output" >&2; exit 1; }
+        done
+
+        python3 - "$acr" "$rg" "$client" <<'PY'
+        import re, sys
+        acr, rg, client = sys.argv[1], sys.argv[2], sys.argv[3]
+        text = open("intent.yaml").read()
+        subscription = __import__("os").environ.get("AZURE_SUBSCRIPTION_ID", "")
+        tenant = __import__("os").environ.get("AZURE_TENANT_ID", "")
+        for key, value in (
+            ("acrName", acr), ("resourceGroup", rg),
+            ("azureClientId", client), ("azureTenantId", tenant),
+            ("azureSubscriptionId", subscription),
+        ):
+            if not value:
+                continue
+            text = re.sub(rf'(\n\s+{key}: )""', rf'\g<1>"{value}"', text)
+        open("intent.yaml", "w").write(text)
+        PY
+
+        # Fail CLOSED. A silently-unwritten identifier would leave the deploy
+        # lane authenticating as nobody, twenty minutes later.
+        grep -qE '^\s+acrName: "[a-z0-9]+"' intent.yaml \
+          || { echo "wiring: acrName was not written into intent.yaml" >&2; exit 1; }
+
+        git add intent.yaml
+        git -c user.name=orun -c user.email=orun@sourceplane.io \
+          commit -m "chore: wire the Azure identifiers foundation produced" >/dev/null
+        git push origin HEAD:main
+
+  # ── 4. Converge ────────────────────────────────────────────────────────────
+  # Everything else, in ONE run, in dependency order: the remaining planes, the
+  # Container Apps environment, six services, three migration bundles.
+  - name: converge
+    needs: [wiring]
+    envInherit: *env
+    timeout: 60m
+    retry:
+      maxRetries: 2
+      kind: exponential
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+
+        orun plan --trigger github-push-main --output plan.json
+        orun run --plan plan.json --remote-state --workspace "{{ inputs.workspace }}"
+
+        # `orun run` exits 0 when jobs finish WAITING — dependencies never
+        # satisfied — so the exit code alone cannot answer "did the fleet
+        # converge". Assert on the sealed execution state instead.
+        #
+        # A real file, not a process substitution: the gate does `test -f` on
+        # its argument, and /dev/fd/NN is a pipe, so `test -f` is false and the
+        # check would fail for the wrong reason at the worst moment.
+        orun status --json > converge-state.json
+        ./scripts/assert-converged.sh plan.json converge-state.json
+
+  # ── 5. Verify ──────────────────────────────────────────────────────────────
+  # Independent of the run that produced it: re-derive the gateway URL from
+  # Azure and probe it, rather than trusting converge's own smoke step.
+  - name: verify
+    needs: [converge]
+    envInherit: *env
+    timeout: 15m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+
+        rg="$(terraform -chdir=infra/foundation/terraform output -raw resource_group)"
+        url="https://$(az containerapp show --name "$(grep -m1 'containerAppName:' src/Services/ApiGateway/component.yaml | awk '{print $2}')" \
+              --resource-group "$rg" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+        echo "verify: gateway at $url"
+
+        for attempt in $(seq 1 12); do
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$url/health" || true)"
+          if [ "$code" = "200" ]; then
+            echo "verify: gateway healthy (200)"
+            exit 0
+          fi
+          echo "verify: $url/health returned ${code:-no response} (attempt ${attempt}/12)"
+          sleep 15
+        done
+        echo "verify: the gateway never became healthy" >&2
+        exit 1
+
+  # ── 6. Docs ────────────────────────────────────────────────────────────────
+  # The manifest of what exists, committed, so the next person does not have to
+  # reconstruct it from the Azure portal.
+  - name: docs
+    needs: [verify]
+    envInherit: *env
+    timeout: 10m
+    run:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
+        cd "$out"
+        mkdir -p docs
+
+        rg="$(terraform -chdir=infra/foundation/terraform output -raw resource_group)"
+        {
+          echo "# Deployment"
+          echo
+          echo "Generated by the stratus bootstrap. Identifiers only — no secrets."
+          echo
+          echo "- product: {{ inputs.productname }} ({{ inputs.productdomain }})"
+          echo "- workspace: {{ inputs.workspace }}"
+          echo "- region: {{ inputs.location }}"
+          echo "- resource group: $rg"
+          echo
+          echo "## Resources"
+          echo
+          az resource list --resource-group "$rg" \
+            --query '[].{name:name,type:type}' -o tsv 2>/dev/null \
+            | sed 's/^/- /' || echo "- (az unavailable; see the Azure portal)"
+        } > docs/deployment.md
+
+        git add docs/deployment.md
+        git -c user.name=orun -c user.email=orun@sourceplane.io \
+          commit -m "docs: the deployment manifest" >/dev/null || true
+        git push origin HEAD:main || true
