@@ -215,6 +215,31 @@ steps:
           fi
         fi
 
+        # ── The Postgres HOSTNAME, read back rather than constructed ──
+        #
+        # This is the one value in this phase that must not be guessed. Coolify
+        # names a standalone database's container after its UUID, not after the
+        # display name, so `Host=<name>` resolves to nothing and all six
+        # services fail their first query — a failure that surfaces as six
+        # unhealthy containers rather than as anything mentioning Postgres.
+        #
+        # Coolify's OpenAPI documents no schema for a database resource, so the
+        # response shape is not knowable ahead of time. Rather than encode a
+        # guess, ask the instance: prefer whatever host it reports, fall back to
+        # the UUID (the container name), and say which was used.
+        PG_HOST="$(api GET "/databases/${PG_UUID}" | python3 -c 'import sys,json,re
+        try: d=json.load(sys.stdin)
+        except Exception: d={}
+        u=d.get("internal_db_url") or d.get("postgres_url") or ""
+        m=re.search(r"@([^:/?]+)", u) if u else None
+        print(m.group(1) if m else "")' 2>/dev/null || true)"
+        if [ -n "$PG_HOST" ]; then
+          echo "provision: postgres host ${PG_HOST} (reported by the instance)"
+        else
+          PG_HOST="$PG_UUID"
+          echo "provision: postgres host ${PG_HOST} (the resource uuid — the instance reported no url)"
+        fi
+
         # ── Kafka and RabbitMQ, as compose services ──
         # `docker_compose_raw` rather than Coolify's one-click `type` enum: the
         # catalog's names vary between Coolify versions, and a bootstrap that
@@ -297,7 +322,7 @@ steps:
           set_env "Messaging__ConsumerGroup" "$svc"
           set_env "ASPNETCORE_URLS" "http://+:8080"
           if [ -n "$PG_PASSWORD" ]; then
-            set_env "ConnectionStrings__Postgres" "Host=${PG_NAME};Database=stratus;Username=stratus;Password=${PG_PASSWORD}"
+            set_env "ConnectionStrings__Postgres" "Host=${PG_HOST};Database=stratus;Username=stratus;Password=${PG_PASSWORD}"
           fi
         done
 

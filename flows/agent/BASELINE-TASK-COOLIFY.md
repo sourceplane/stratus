@@ -106,6 +106,19 @@ error. The ones no token can self-heal, and what they look like:
   Report it rather than picking another name — a collision usually means a
   previous run of this bootstrap is still there, and the resumable path should
   adopt it rather than build a second one.
+- **The services start but cannot resolve `kafka`, `rabbitmq` or the Postgres
+  host.** This is the likeliest first failure and the one to check before any
+  other theory, because Coolify puts each resource on its own Docker network by
+  default: a name that resolves inside one resource's compose project resolves
+  to nothing from a different application's container. It looks like six
+  healthy-then-dying containers whose logs mention a connection refused or an
+  unknown host, and it is a *configuration* problem, not a code one. The fix is
+  to put the six applications and the three data resources on a shared network
+  — in Coolify, the server's "Connect to Predefined Network" toggle — and then
+  re-run `--set from=converge`. Report what the container logs actually say
+  before changing anything; the Postgres host in particular is read back from
+  the instance rather than constructed, and `provision` logs which value it
+  used and where it came from.
 
 If it is transient (a 5xx, a pull timeout) or unclear: re-run the umbrella
 once yourself. If the same phase fails again, stop and report the last 30
