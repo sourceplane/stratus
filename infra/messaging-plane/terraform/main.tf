@@ -1,6 +1,18 @@
 terraform {
   required_version = ">= 1.9.0"
 
+  # State lives on the Orun platform. The runner exports TF_HTTP_* per job
+  # (address = …/state/tfstate/{component}/{env}, the run token as password),
+  # so this block needs no arguments and no -backend-config, and there is no
+  # storage account to provision before the first apply can run.
+  #
+  # Declaring it is NOT optional: without a backend block terraform keeps
+  # state on local disk, and a job workspace is ephemeral. Every apply would
+  # then start from empty state and try to create resources that already
+  # exist — which fails on the globally-unique names, on the SECOND run, long
+  # after the first one looked fine.
+  backend "http" {}
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"

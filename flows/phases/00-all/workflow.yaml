@@ -178,12 +178,45 @@ steps:
           exit 0
         fi
 
-        tf=infra/foundation/terraform
-        acr="$(terraform -chdir="$tf" output -raw acr_name)"
-        rg="$(terraform -chdir="$tf" output -raw resource_group)"
-        client="$(terraform -chdir="$tf" output -raw deploy_identity_client_id)"
+        # NOT `terraform output`. State lives on the platform behind the http
+        # backend, and the runner exports TF_HTTP_* per JOB — this step is not
+        # a job, so it has neither the address nor the token, and a
+        # `terraform output` here would read an empty local state and report
+        # nothing while looking like it worked.
+        #
+        # Two of the three values need no state at all, because the names are
+        # derived: that determinism was chosen for re-creatability and it pays
+        # again here. The shell must reproduce terraform's substr(sha256(),0,6)
+        # EXACTLY, so `printf` (no trailing newline) rather than `echo`.
+        # The prefix comes from intent.yaml, which is where terraform gets it
+        # too (namespacePrefix + namespace arrive as TF_VAR_*). Deriving it
+        # from githuborg would agree only by coincidence — they happen to both
+        # be "sourceplane" today — and would silently produce the wrong names
+        # for any product whose namespace differs from its GitHub org.
+        prefix="$(awk '/^      terraform-azure:/{f=1;next} /^      [a-z]/{f=0} f && $1=="namespacePrefix:"{p=$2} f && $1=="namespace:"{n=$2} END{gsub(/"/,"",p); gsub(/"/,"",n); print p n}' intent.yaml)"
+        test -n "$prefix" || { echo "wiring: could not read the name prefix from intent.yaml" >&2; exit 1; }
+        rg="${prefix}-rg"
+        compact="$(printf '%s' "$prefix" | tr -d '-' | tr '[:upper:]' '[:lower:]')"
+        suffix="$(printf '%s' "${AZURE_SUBSCRIPTION_ID}-${prefix}" | sha256sum | cut -c1-6)"
+        acr="${compact}acr${suffix}"
+
+        # The identity's client id is a GUID Azure assigns — it cannot be
+        # derived, so it is read back from Azure itself.
+        az account show >/dev/null 2>&1 || az login --identity >/dev/null 2>&1 || true
+        client="$(az identity show --name "${prefix}-deploy" --resource-group "$rg" \
+                    --query clientId -o tsv 2>/dev/null || true)"
+
+        # Fail CLOSED, and check the DERIVATION against reality rather than
+        # trusting it: if terraform's sha256 and this shell's ever disagree,
+        # the registry name would be wrong and every image push would fail
+        # later with a confusing 404. Ask Azure whether the name exists.
+        az acr show --name "$acr" --resource-group "$rg" >/dev/null 2>&1 || {
+          echo "wiring: derived registry name '$acr' does not exist in '$rg'." >&2
+          echo "wiring: the derivation here disagrees with the one in foundation's terraform." >&2
+          exit 1
+        }
         for v in "$acr" "$rg" "$client"; do
-          test -n "$v" || { echo "wiring: foundation produced an empty output" >&2; exit 1; }
+          test -n "$v" || { echo "wiring: could not resolve one of acr/rg/client-id" >&2; exit 1; }
         done
 
         python3 - "$acr" "$rg" "$client" <<'PY'
@@ -259,9 +292,18 @@ steps:
         out="{{ inputs.out }}"; [ -n "$out" ] || out="$PWD/product"
         cd "$out"
 
-        rg="$(terraform -chdir=infra/foundation/terraform output -raw resource_group)"
-        url="https://$(az containerapp show --name "$(grep -m1 'containerAppName:' src/Services/ApiGateway/component.yaml | awk '{print $2}')" \
-              --resource-group "$rg" --query 'properties.configuration.ingress.fqdn' -o tsv)"
+        # Same reasoning as `wiring`: no terraform output here, because this
+        # step is not a job and holds no TF_HTTP_* for the remote state. The
+        # resource group name is committed in intent.yaml by then, so read it
+        # from there — the value the deploy lane actually used.
+        rg="$(grep -m1 '^        resourceGroup:' intent.yaml | sed 's/.*resourceGroup: *//; s/"//g')"
+        test -n "$rg" || { echo "verify: intent.yaml carries no resourceGroup" >&2; exit 1; }
+
+        app="$(grep -m1 'containerAppName:' src/Services/ApiGateway/component.yaml | awk '{print $2}')"
+        fqdn="$(az containerapp show --name "$app" --resource-group "$rg" \
+                  --query 'properties.configuration.ingress.fqdn' -o tsv 2>/dev/null || true)"
+        test -n "$fqdn" || { echo "verify: $app has no ingress fqdn in $rg" >&2; exit 1; }
+        url="https://${fqdn}"
         echo "verify: gateway at $url"
 
         for attempt in $(seq 1 12); do
@@ -292,7 +334,11 @@ steps:
         cd "$out"
         mkdir -p docs
 
-        rg="$(terraform -chdir=infra/foundation/terraform output -raw resource_group)"
+        # From intent.yaml, not terraform output — same reason as the two steps
+        # above: no TF_HTTP_* outside a job.
+        rg="$(grep -m1 '^        resourceGroup:' intent.yaml | sed 's/.*resourceGroup: *//; s/"//g')"
+        test -n "$rg" || { echo "docs: intent.yaml carries no resourceGroup" >&2; exit 1; }
+
         {
           echo "# Deployment"
           echo
@@ -301,7 +347,7 @@ steps:
           echo "- product: {{ inputs.productname }} ({{ inputs.productdomain }})"
           echo "- workspace: {{ inputs.workspace }}"
           echo "- region: {{ inputs.location }}"
-          echo "- resource group: $rg"
+          echo "- resource group: \`$rg\`"
           echo
           echo "## Resources"
           echo
@@ -310,7 +356,48 @@ steps:
             | sed 's/^/- /' || echo "- (az unavailable; see the Azure portal)"
         } > docs/deployment.md
 
-        git add docs/deployment.md
+        # operations.md — the brief's completion report points at it, so it has
+        # to exist. It is written from the repo's own shape rather than
+        # hand-maintained prose that would rot the first time a service moves.
+        {
+          echo "# Operations"
+          echo
+          echo "## Converging a change"
+          echo
+          echo 'Merging to `main` runs the whole plan in dependency order:'
+          echo 'terraform for the four planes, an ACA revision per service, then'
+          echo 'the EF migration bundles. Nothing needs to be deployed by hand.'
+          echo
+          echo '```'
+          echo 'orun plan --trigger github-push-main --output plan.json'
+          echo 'orun run --plan plan.json --remote-state'
+          echo '```'
+          echo
+          echo "## Services"
+          echo
+          for c in src/Services/*/component.yaml; do
+            name="$(grep -m1 '  name:' "$c" | awk '{print $2}')"
+            desc="$(grep -m1 '  description:' "$c" | sed 's/  description: *//')"
+            echo "- **$name** — $desc"
+          done
+          echo
+          echo "## Credentials"
+          echo
+          echo 'There are none to rotate. The deploy lane authenticates by'
+          echo 'workload identity federation — GitHub mints a token per run and'
+          echo 'Azure trusts this repository — and the services reach Postgres,'
+          echo 'Event Hubs and Service Bus as their managed identity. The three'
+          echo 'Azure values in `intent.yaml` are identifiers, not secrets.'
+          echo
+          echo "## Migrations"
+          echo
+          echo 'Each bounded context owns its own EF Core context and migration'
+          echo 'bundle. A pull request builds the bundle, prints the SQL and'
+          echo 'rehearses it against a throwaway Postgres; merging applies the'
+          echo 'same artifact that was rehearsed.'
+        } > docs/operations.md
+
+        git add docs/deployment.md docs/operations.md
         git -c user.name=orun -c user.email=orun@sourceplane.io \
-          commit -m "docs: the deployment manifest" >/dev/null || true
+          commit -m "docs: the deployment manifest and the operations guide" >/dev/null || true
         git push origin HEAD:main || true
