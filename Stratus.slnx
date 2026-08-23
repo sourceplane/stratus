@@ -34,6 +34,7 @@
   </Folder>
   <Folder Name="/tooling/">
     <Project Path="tooling/Wire/Stratus.Wire.csproj" />
+    <Project Path="tooling/Rebrand/Stratus.Rebrand.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Stratus.Architecture.Tests/Stratus.Architecture.Tests.csproj" />

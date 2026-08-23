@@ -1,0 +1,147 @@
+apiVersion: orun.dev/v1
+kind: Blueprint
+metadata:
+  name: stratus-baseline
+  description: >-
+    Stratus as a Blueprint of itself — instantiate a new .NET microservices
+    product on Azure from the Stratus baseline. `orun new` copies the tree and
+    the `rebrand` hook rewrites the instance identity across it; BOOTSTRAP.md
+    carries the operator checklist no hook can perform (the Azure subscription,
+    the workspace binding).
+
+# ── INPUTS ────────────────────────────────────────────────────────────────
+# The instance-identity contract. Org-owned identity is deliberately NOT an
+# input and the rebrand tool refuses to touch it: the `sourceplane` GitHub org,
+# the `sourceplane.io` apiVersion, `ghcr.io/sourceplane`, and the pinned
+# stack-basalt catalog reference all belong to the platform. A fork that
+# renamed them would point its intent at a composition stack nobody publishes.
+inputs:
+  repoName:
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+    required: true
+    description: >-
+      Repo slug (e.g. acme-cloud). Becomes intent metadata.name, the image
+      names, the Container App names, and — with hyphens turned to underscores
+      — the design-time database names, because a hyphenated identifier is not
+      legal unquoted in Postgres.
+  productName:
+    type: string
+    required: true
+    description: Human display name (e.g. "Acme Cloud").
+  pascalName:
+    type: string
+    pattern: "^[A-Z][A-Za-z0-9]*$"
+    required: true
+    description: >-
+      The .NET identifier (e.g. AcmeCloud). It becomes the root namespace and
+      assembly-name prefix of all 33 projects, so it must be a legal C#
+      identifier — the rebrand tool checks the pattern before touching a file,
+      because the alternative is a tree that scaffolds cleanly and does not
+      compile.
+  productDomain:
+    type: string
+    required: true
+    description: Product domain (e.g. acme.dev) — docs and mail, no zone needed yet.
+
+# ── SOURCES ───────────────────────────────────────────────────────────────
+# The baseline is this repo. Run `orun new` from the Stratus root so `path: .`
+# resolves to it; orun pins it by digest before any module reads it, so a fork
+# is reproducible and provenanced.
+sources:
+  - name: baseline
+    kind: dir
+    path: .
+
+# `orun new` snapshots the WORKING TREE rather than the git index, so anything
+# a local build left behind would otherwise be copied into the fork. The .NET
+# ones matter more than most: obj/ holds project.assets.json with absolute
+# paths and the BASELINE's package graph, and a fork that inherits it fails
+# restore in a way that reads like a NuGet problem.
+ignore:
+  - bin
+  - obj
+  - artifacts
+  - TestResults
+  - .vs
+  - .terraform
+  - "*.user"
+  - "*.tsbuildinfo"
+  # Rendered from appsettings.template.json at deploy time and gitignored —
+  # a fork must render its own, against its own wiring.
+  - "**/appsettings.Generated.json"
+
+# ── MODULES ───────────────────────────────────────────────────────────────
+# One module per orun component, plus the shared roots every component needs.
+# The dependsOn edges mirror the components' own, so orun's DAG orders the copy
+# the same way it orders a run.
+modules:
+  # ONE module, copying the whole tree.
+  #
+  # The first draft had a module per directory with an `include:` list on the
+  # root one — but Blueprint modules have no `include` field (a module is a
+  # directory copy or an inline `files` body), so the root module copied
+  # everything and orun refused the blueprint with a target collision against
+  # every other module. That refusal is the schema working: two modules writing
+  # one path is ambiguous, and it said so before writing a byte.
+  #
+  # With `from: .` the tree arrives in one placement and `ignore:` above does
+  # the filtering, which is what a whole-repo instantiation actually is. The
+  # per-component DAG the Cloudflare baselines declare buys ordering they need
+  # because they copy selected subsets; nothing here is selected.
+  - name: baseline
+    mode: copy
+    source: baseline
+    from: .
+    to: .
+
+  # Hook argv is NOT templated — `{{ inputs.x }}` reaches the process as those
+  # literal characters, which the rebrand tool rejected as an invalid C#
+  # identifier (loudly, which is why this was a one-line fix rather than a
+  # tree branded "{{ inputs.pascalName }}"). Inline `files` ARE rendered, so
+  # the instance identity travels through this file instead.
+  # `template`, not `copy`: copy needs a source, and this module has no
+  # source — its body IS the blueprint, rendered.
+  - name: rebrand-values
+    mode: template
+    files:
+      .rebrand/values.json: |
+        {
+          "pascalName": "{{ .pascalName }}",
+          "repoName": "{{ .repoName }}",
+          "productName": "{{ .productName }}",
+          "productDomain": "{{ .productDomain }}"
+        }
+
+# ── HOOKS ─────────────────────────────────────────────────────────────────
+hooks:
+  postInstantiate:
+    # The rebrand is a .NET tool because the thing it renames is a .NET
+    # solution, and the only honest check that a rename worked is
+    # `dotnet build`. Keeping both in one runtime means the tool and its
+    # verification cannot disagree about what compiles.
+    #
+    # It rewrites file CONTENTS and file PATHS: 33 projects, their directories,
+    # their .csproj names and every namespace inside them. Paths are renamed
+    # deepest-first, because renaming a parent invalidates every child path
+    # still queued behind it.
+    #
+    # It exits non-zero when nothing matched. A rebrand that renamed nothing
+    # has run against the wrong tree, and reporting success there is exactly
+    # how a fork ships with the baseline's identity still in it.
+    - id: rebrand
+      run:
+        ["dotnet", "run", "--project", "tooling/Rebrand", "--",
+         "--root", ".", "--values", ".rebrand/values.json"]
+
+    # The gate. A rename that produces a tree which does not compile is worse
+    # than no rename: it scaffolds clean, and the failure surfaces to whoever
+    # opens the repo next. Building here means the hook fails instead.
+    - id: verify-build
+      run: ["dotnet", "build", "--configuration", "Release"]
+
+    # And the tests, which are what prove the rename reached INTO the code
+    # rather than only across its file names — the architecture suite asserts
+    # the layering by namespace, so it fails if the namespaces were half-done.
+    - id: verify-tests
+      run: ["dotnet", "test", "--configuration", "Release", "--no-build"]
