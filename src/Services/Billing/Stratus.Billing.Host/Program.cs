@@ -12,7 +12,6 @@ builder.Services
     .AddApplicationPart(typeof(SubscriptionsController).Assembly);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
 
 builder.Services.AddBillingApplication();
 builder.Services.AddBillingInfrastructure(
@@ -25,7 +24,6 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.MapDefaultEndpoints();
-app.MapOpenApi();
 app.MapControllers();
 
 app.Run();
