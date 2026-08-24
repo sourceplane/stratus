@@ -9,7 +9,6 @@
     <ProjectReference Include="../../../BuildingBlocks/Stratus.ServiceDefaults/Stratus.ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <!-- Design-time only, and required HERE rather than only on
          Infrastructure: `dotnet ef` resolves its services from the STARTUP
          project, and this package is marked PrivateAssets=all downstream so

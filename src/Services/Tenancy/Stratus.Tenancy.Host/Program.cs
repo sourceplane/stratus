@@ -12,7 +12,6 @@ builder.Services
     .AddApplicationPart(typeof(TenantsController).Assembly);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
 
 builder.Services.AddTenancyApplication();
 builder.Services.AddTenancyInfrastructure(
@@ -25,7 +24,6 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.MapDefaultEndpoints();
-app.MapOpenApi();
 app.MapControllers();
 
 app.Run();

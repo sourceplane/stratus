@@ -20,6 +20,10 @@
     <ProjectReference Include="../../src/Services/Projector/Stratus.Projector.Infrastructure/Stratus.Projector.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Services/Notifier/Stratus.Notifier.Infrastructure/Stratus.Notifier.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Shared/Stratus.Messaging/Stratus.Messaging.csproj" />
+    <!-- A HOST, so the API-surface rule can drive the real pipeline. A rule
+         that asserted "Program.cs mentions MapDefaultEndpoints" would pass on
+         a fleet whose documents 404. -->
+    <ProjectReference Include="../../src/Services/Tenancy/Stratus.Tenancy.Host/Stratus.Tenancy.Host.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -28,5 +32,6 @@
     <PackageReference Include="NetArchTest.Rules" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
 </Project>

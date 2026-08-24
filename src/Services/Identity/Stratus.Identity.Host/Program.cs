@@ -14,7 +14,6 @@ builder.Services
     .AddApplicationPart(typeof(UsersController).Assembly);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
 
 builder.Services.AddIdentityApplication();
 builder.Services.AddIdentityInfrastructure(
@@ -27,7 +26,6 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.MapDefaultEndpoints();
-app.MapOpenApi();
 app.MapControllers();
 
 app.Run();
