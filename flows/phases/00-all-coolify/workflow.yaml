@@ -359,6 +359,65 @@ steps:
 
         python3 -c 'import re,sys,pathlib; p=pathlib.Path("intent.yaml"); t=p.read_text(); p.write_text(re.sub(r"(?m)^(\s*coolifyUrl:\s*).*$", lambda m: m.group(1)+chr(34)+sys.argv[1]+chr(34), t))' "$COOLIFY_URL"
 
+        # ── The workspace binding ──
+        #
+        # This is the step whose absence made three files carry a comment
+        # saying "no workspace binding yet". Without it the deploy lane cannot
+        # read its own credential: `COOLIFY_TOKEN` is a `secret://` reference,
+        # and with state local orun wires the ORUN_SECRET_<KEY> resolver
+        # instead, finds nothing, and `deploy-coolify` fails its non-empty
+        # assertion — in CI *and* in this run's own converge phase.
+        WS="{{ inputs.workspace }}"
+        python3 -c 'import re,sys,pathlib
+        p=pathlib.Path("intent.yaml"); t=p.read_text()
+        t=re.sub(r"(?m)^(\s*mode:\s*).*$", lambda m: m.group(1)+"remote", t, count=1)
+        t=re.sub(r"(?m)^(\s*workspace:\s*).*$", lambda m: m.group(1)+chr(34)+sys.argv[1]+chr(34), t, count=1)
+        p.write_text(t)' "$WS"
+
+        orun cloud link --org "$WS" || true
+        orun cloud check --org "$WS" || {
+          echo "wiring: this repo is not allow-listed for ${WS}." >&2
+          echo "wiring: grant it in the console under Git Repos, then re-run --set from=wiring." >&2
+          exit 1
+        }
+
+        # ── The deploy credential, as a brokered POINTER ──
+        #
+        # No token value is written here and none is stored: the row records
+        # "mint from this connection with this template", and the platform
+        # mints just-in-time at resolve, ledgered per issuance. That is why
+        # the sandbox holds an admin grant for the life of this run — writing
+        # brokered provider secrets is the write floor it exists for.
+        #
+        # `manage-resources` rather than `deploy-application`: the latter binds
+        # ONE applicationUuid, and all six services resolve the same
+        # project-rung key, so a per-application binding would need six keys
+        # and six component rewrites. Coolify has no token-derivation endpoint
+        # — every template serves the connection's own token — so the six-key
+        # version would hand over identical bytes and buy only a finer ledger
+        # label. Not worth six more moving parts on a lane this new.
+        CONN="$(orun integrations list --org "$WS" --json 2>/dev/null | python3 -c 'import json,sys
+        try: rows=json.load(sys.stdin)
+        except Exception: rows=[]
+        print(next((r["id"] for r in rows if r.get("provider")=="coolify" and r.get("status")=="active"), ""))')"
+        test -n "$CONN" || { echo "wiring: no active Coolify connection in ${WS}" >&2; exit 1; }
+
+        if orun secrets list --org "$WS" --project --json 2>/dev/null | python3 -c 'import json,sys
+        try: rows=json.load(sys.stdin)
+        except Exception: rows=[]
+        sys.exit(0 if any((r.get("secretKey") or r.get("key"))=="COOLIFY_TOKEN" for r in rows) else 1)'; then
+          echo "wiring: COOLIFY_TOKEN already bound — kept"
+        else
+          orun integrations coolify secret create COOLIFY_TOKEN \
+            --org "$WS" --connection "$CONN" --template manage-resources --project || {
+            echo "wiring: binding COOLIFY_TOKEN failed. If the listings above worked, this" >&2
+            echo "wiring: credential's role is below ADMIN — resource-hiding masks the denial" >&2
+            echo "wiring: as not_found. Brokered secret creation requires the admin role." >&2
+            exit 1
+          }
+          echo "wiring: COOLIFY_TOKEN bound to ${CONN} (coolify/manage-resources)"
+        fi
+
         rm -f .coolify-apps.env .coolify-pg-password
         if git diff --quiet; then
           echo "wiring: already bound, nothing to commit"
