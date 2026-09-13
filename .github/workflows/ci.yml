@@ -33,6 +33,20 @@ permissions:
 # stack — a raw `dotnet build` step here is how CI and the deploy lane start to
 # disagree about what "built" means.
 jobs:
+  # The bootstrap flows' contract suite, run directly. bash, python3 and git —
+  # no install, no network, no credential. This repo carries TWO baselines
+  # (`stratus` and `stratus-coolify`) over one tree, so the manifest test checks
+  # both blueprint*.yaml files, each against its own declared umbrella.
+  flows-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Manifest contract test
+        run: |
+          set -euo pipefail
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          bash flows/testing/manifest.test.sh
+
   plan:
     runs-on: ubuntu-latest
     outputs:
