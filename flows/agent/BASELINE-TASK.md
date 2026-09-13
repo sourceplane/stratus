@@ -47,18 +47,29 @@ yourself wanting to store an Azure secret, something has gone wrong.
 
 ## Step 1 — intake (ALWAYS first, before any command)
 
-Ask the operator, in ONE message, for:
+Your instructions carry a **bootstrap contract** — a JSON block the console
+resolved before this session started. Read its `asks` list. Those keys, and
+only those, are what you ask the operator for; everything else the build
+needs is already in the contract's `inputs`.
 
-1. Product display name (e.g. "Acme Cloud")
-2. Product domain (e.g. acme.dev — used in docs/emails; no zone needed yet)
-3. Azure region (offer `westeurope` as the default)
-4. Azure subscription id to deploy into — if the workspace has more than one
-   Azure connection, which one
+That list is not fixed, and it is not this file's to decide. The console
+derives it from this baseline's manifest, so it shrinks when the console has
+already collected a value and grows when the manifest declares a new one —
+without an edit here. Do not ask for a value that is not in `asks`, even if
+this file appears to name one: if it is in `inputs`, it has been answered.
 
-Wait for the reply. Confirm back the four values plus repo `{{REPO}}` in one
-line, then proceed immediately (do not wait again unless they object). If no
-reply arrives in 30 minutes, post a reminder; after 2 hours, stop and report
+Ask for them in ONE message, as a numbered list the operator can answer in
+one line, using each input's own `label` as the question. Do not use a
+multiple-choice or options tool: these are free-text values only the operator
+knows, so a picker can offer nothing but invented examples.
+
+Wait for the reply. Confirm back the values plus repo `{{REPO}}` in one line,
+then proceed immediately (do not wait again unless they object). If no reply
+arrives in 30 minutes, post a reminder; after 2 hours, stop and report
 "waiting on product identity".
+
+If `asks` is empty there is nothing to ask. Post your first progress message
+and run the umbrella straight away.
 
 ## Step 2 — run the umbrella
 
@@ -66,8 +77,8 @@ reply arrives in 30 minutes, post a reminder; after 2 hours, stop and report
 cd <the product checkout>
 orun workflow run 'github:sourceplane/stratus@{{TAG}}//flows/phases/00-all/workflow.yaml' \
   --set workspace={{WS}} --set reponame={{REPO}} \
-  --set productname="<from intake>" --set productdomain=<from intake> \
-  --set location=<from intake> --set out="$PWD"
+  --set productname="<from the contract>" --set productdomain=<from the contract> \
+  --set location=<from the contract> --set out="$PWD"
 ```
 
 Run it in the background and monitor its output continuously.

@@ -84,6 +84,18 @@ for path in manifests:
         if asked == "console" and not field.get("pattern"):
             B(f"inputs[{key}] is asked by the console but declares no pattern")
 
+        # `from` says the CONSOLE already holds this value, so it renders no
+        # field for it (saas-bootstrap-console BC-K5). Two ways to get it
+        # wrong, and the platform refuses both — check them here too, so the
+        # mistake is caught in this repo rather than at a live bootstrap.
+        src = field.get("from")
+        if src is not None:
+            if src not in ("repo.name", "repo.owner", "repo.fullName"):
+                B(f"inputs[{key}].from is {src!r} — must be repo.name, repo.owner or repo.fullName")
+            if asked != "console":
+                B(f"inputs[{key}] is asked by the agent but declares from — "
+                  "the session holds no repository facts")
+
     # ── secrets: BOTH or NEITHER, checked both ways ───────────────────────
     declared = {s.get("key"): (s.get("provider"), s.get("template")) for s in (spec.get("secrets") or [])}
     if script_text is None:
@@ -109,6 +121,29 @@ for path in manifests:
             B(f"bootstrap.{field} is missing")
         elif not (root / rel).exists():
             B(f"bootstrap.{field} names {rel}, which does not exist")
+
+    # ── the brief reads the CONTRACT, not its own copy of the questions ───
+    #
+    # BC-K5. The brief used to name its intake itself ("ask the operator these
+    # three things"), which works for exactly one baseline: adding an input
+    # then needs an edit to prose in this repo at a pinned tag, and the
+    # manifest and the question an operator is actually asked drift apart with
+    # nothing to notice. The platform now hands the session an `asks` list
+    # derived from THIS file, so the brief must defer to it.
+    bck5_brief_rel = boot.get("agentBrief")
+    bck5_brief = (root / bck5_brief_rel).read_text() if bck5_brief_rel and (root / bck5_brief_rel).exists() else ""
+    if bck5_brief:
+        if "asks" not in bck5_brief:
+            B(f"{bck5_brief_rel} never mentions the contract's `asks` list — it is still "
+              "carrying its own intake, so a new input here would not be asked for")
+        bck5_agent_keys = [f.get("key") for f in (spec.get("inputs") or [])
+                           if f.get("askedBy") == "agent"]
+        # A brief may still SHOW the keys in its example command; what it must
+        # not do is number them as the questions to ask.
+        for n, k in enumerate(bck5_agent_keys, start=1):
+            if re.search(rf"^\s*{n}\.\s.*\b{re.escape(k or '')}\b", bck5_brief, re.M):
+                B(f"{bck5_brief_rel} numbers {k} as intake question {n} — the contract's "
+                  "`asks` decides what is asked, and a numbered copy here goes stale")
 
     umb_rel = boot.get("umbrella")
     umb = (root / umb_rel).read_text() if umb_rel and (root / umb_rel).exists() else ""
