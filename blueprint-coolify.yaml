@@ -55,6 +55,12 @@ spec:
       label: Repo name
       pattern: "^[a-z][a-z0-9-]{1,38}$"
       askedBy: console
+      # The console already has this: the operator picked the repository. Say
+      # so rather than making the flow ask for the name printed above the
+      # field — and say it HERE, because the only alternative was for the
+      # console to special-case this key by name, which would make the console
+      # the authority on what a baseline's own input means.
+      from: repo.name
     - key: productname
       label: Product display name
       askedBy: agent
