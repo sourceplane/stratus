@@ -1,0 +1,85 @@
+# The stratus blueprint card: the CONTRACT the platform's bootstrap door reads
+# and the console renders, screen for screen (epic saas-bootstrap-console, BC3).
+#
+# THIS REPO SERVES TWO BASELINES. `stratus` (Azure, this file) and
+# `stratus-coolify` (`blueprint-coolify.yaml`) are separate registry rows over
+# one tree, with their own brief and umbrella. The registry row names which
+# manifest belongs to it via `manifestPath`; this one is the default.
+#
+# The registry (orun-cloud `infra/baselines-registry/baselines.yaml`) owns
+# identity and commerce — id, visibility, tier, the pinned tag, the brief and
+# umbrella paths. This file owns the build contract. Neither restates the
+# other, which is why there is no `tag` here: this file is fetched *at* the tag
+# the registry pins, so a tag here could only rot.
+apiVersion: orun.io/v1
+kind: Blueprint
+metadata:
+  name: stratus
+  displayName: Stratus — .NET microservices on Azure
+  description: >
+    Six ASP.NET Core services in clean architecture behind a YARP gateway, EF
+    Core migrations per bounded context, a transactional outbox over Event Hubs
+    and Service Bus, and CI that converges the fleet.
+  tags: [saas, dotnet, azure, microservices]
+spec:
+  source:
+    repo: sourceplane/stratus
+    # No `tag`. See the header: the registry pins it, this file is fetched at it.
+
+  overview:
+    lede: >
+      Six .NET services in clean architecture, on Azure, with the messaging
+      spine wired from the first phase.
+    architecture:
+      - layer: Edge
+        items: [YARP gateway]
+      - layer: Services
+        items: ["6 ASP.NET Core services"]
+      - layer: Data
+        items: [Azure SQL, EF Core migrations]
+      - layer: Messaging
+        items: [Event Hubs, Service Bus, transactional outbox]
+      - layer: Delivery
+        items: [Terraform, GitHub Actions]
+    outcome:
+      - A converged fleet on stage and prod
+      - Migrations per bounded context
+      - An outbox, not dual writes
+
+  requires:
+    # Azure is the whole platform here. GitHub arrives as the App installation
+    # plus the repo link, not as a connection row.
+    integrations: [github, azure]
+    apiKeyRole: admin
+
+  inputs:
+    - key: reponame
+      label: Repo name
+      pattern: "^[a-z][a-z0-9-]{1,38}$"
+      askedBy: console         # needed before repo creation
+    - key: productname
+      label: Product display name
+      askedBy: agent
+    - key: productdomain
+      label: Product domain
+      askedBy: agent
+    - key: location
+      label: Azure region
+      askedBy: agent           # the umbrella defaults it to westeurope
+
+  # NO `secrets` block, and that is a declaration rather than an omission: this
+  # repo has no flows/common/create-secrets.sh. The contract test enforces
+  # both-or-neither in both directions, so this file cannot quietly drift into
+  # promising the console keys nothing will create.
+  #
+  # NO `programme` block, for the same reason: these umbrellas make no
+  # ensure-milestone calls. Stratus predates the BT task-plane machinery that
+  # cirrus and lumen carry. When it gains that, both blocks arrive together.
+
+  bootstrap:
+    umbrella: flows/phases/00-all/workflow.yaml
+    agentBrief: flows/agent/BASELINE-TASK.md
+    expectedMinutes: 110
+
+  # NO `verify.urls`. Both umbrellas verify a runtime-derived $FQDN rather than
+  # a URL templated from declared inputs, so a pattern here would be invented.

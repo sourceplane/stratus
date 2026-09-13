@@ -1,0 +1,79 @@
+# The stratus-coolify blueprint card: the CONTRACT the platform's bootstrap
+# door reads and the console renders (epic saas-bootstrap-console, BC3).
+#
+# THIS REPO SERVES TWO BASELINES. `stratus` (Azure, `blueprint.yaml`) and
+# `stratus-coolify` (this file) are separate registry rows over one tree, with
+# their own brief and umbrella. The `stratus-coolify` registry row names this
+# file via `manifestPath`; without that field the door would fetch the default
+# `blueprint.yaml` and render the Azure baseline's providers for a Coolify
+# build — which is the same class of mistake as the row that pointed at the
+# Azure brief until it was corrected.
+#
+# No `tag` here: the registry pins it and this file is fetched at it.
+apiVersion: orun.io/v1
+kind: Blueprint
+metadata:
+  name: stratus-coolify
+  displayName: Stratus — .NET microservices on your own server
+  description: >
+    The same six services, deployed to a Coolify instance you run. Postgres,
+    Kafka and RabbitMQ as Coolify resources; one bearer token instead of a
+    cloud subscription; no terraform.
+  tags: [saas, dotnet, coolify, self-hosted]
+spec:
+  source:
+    repo: sourceplane/stratus
+
+  overview:
+    lede: >
+      The same six services on a box you own. The Coolify instance is the whole
+      platform — one token, no cloud subscription.
+    architecture:
+      - layer: Edge
+        items: [Coolify proxy]
+      - layer: Services
+        items: ["6 ASP.NET Core services"]
+      - layer: Data
+        items: [Postgres, EF Core migrations]
+      - layer: Messaging
+        items: [Kafka, RabbitMQ]
+      - layer: Delivery
+        items: [Coolify deploys, GitHub Actions]
+    outcome:
+      - No cloud subscription
+      - One token, one instance
+      - Six container builds, then it is up
+
+  requires:
+    # A Coolify connection and nothing else — no cloud subscription, no
+    # federated identity, no terraform state. The instance IS the platform.
+    integrations: [github, coolify]
+    apiKeyRole: admin
+
+  inputs:
+    - key: reponame
+      label: Repo name
+      pattern: "^[a-z][a-z0-9-]{1,38}$"
+      askedBy: console
+    - key: productname
+      label: Product display name
+      askedBy: agent
+    - key: productdomain
+      label: Product domain
+      askedBy: agent
+    # No `location`: the Coolify umbrella takes no region — the box is wherever
+    # the operator put it. Declaring one would ask for something nothing reads.
+
+  # NO `secrets` and NO `programme`, declared as facts rather than omissions:
+  # this repo has no flows/common/create-secrets.sh and its umbrellas make no
+  # ensure-milestone calls. The contract test enforces both-or-neither in both
+  # directions, so neither block can drift into promising something that will
+  # not happen.
+
+  bootstrap:
+    umbrella: flows/phases/00-all-coolify/workflow.yaml
+    agentBrief: flows/agent/BASELINE-TASK-COOLIFY.md
+    expectedMinutes: 55
+
+  # NO `verify.urls`: the umbrella verifies a runtime-derived $FQDN, not a URL
+  # templated from declared inputs.
